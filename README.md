@@ -1,5 +1,12 @@
 # samloader
 Download firmware for Samsung devices (without any extra Windows drivers).
+
+## Low maintenance warning
+
+Given https://github.com/samloader/samloader was archived and this didn't work I just fixed it.
+I'll probably still use it ~ once a year and will try to fix at this point, but don't plan on
+supporting much more than my use case.
+
 ## Installation
 ```
 pip3 install git+https://github.com/samloader/samloader.git
