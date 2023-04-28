@@ -11,7 +11,7 @@ supporting much more than my use case.
 ## Installation
 
 ```
-$ pip3 install git+https://github.com/samloader/samloader.git
+$ pip3 install git+https://github.com/martinetd/samloader.git
 ```
 
 ## Usage
@@ -45,4 +45,4 @@ $ samloader -m GT-I8190N -r BTU decrypt -v I8190NXXAMJ2/I8190NBTUAMJ1/I8190NXXAM
 ## Note
 
 This project was formerly hosted at `nlscc/samloader`, and has moved to
-`samloader/samloader`.
+`samloader/samloader`, and is now currently forked on `martinetd/samloader`...
