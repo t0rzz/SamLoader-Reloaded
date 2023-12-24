@@ -36,6 +36,8 @@ def binaryinform(fwv: str, model: str, region: str, nonce: str) -> str:
         "ACCESS_MODE": 2,
         "BINARY_NATURE": 1,
         "CLIENT_PRODUCT": "Smart Switch",
+        "CLIENT_VERSION": "4.3.23123_1",
+        "DEVICE_IMEI_PUSH": "12345678901234",
         "DEVICE_FW_VERSION": fwv,
         "DEVICE_LOCAL_CODE": region,
         "DEVICE_MODEL_NAME": model,
