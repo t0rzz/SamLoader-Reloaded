@@ -28,7 +28,7 @@ def build_reqbody(fusmsg: ET.Element, params: dict):
         sedata = ET.SubElement(setag, "Data")
         sedata.text = str(value)
 
-def binaryinform(fwv: str, model: str, region: str, nonce: str) -> str:
+def binaryinform(fwv: str, model: str, region: str, imei: str, nonce: str) -> str:
     """ Build a BinaryInform request. """
     fusmsg = ET.Element("FUSMsg")
     build_reqhdr(fusmsg)
@@ -37,7 +37,7 @@ def binaryinform(fwv: str, model: str, region: str, nonce: str) -> str:
         "BINARY_NATURE": 1,
         "CLIENT_PRODUCT": "Smart Switch",
         "CLIENT_VERSION": "4.3.23123_1",
-        "DEVICE_IMEI_PUSH": "12345678901234",
+        "DEVICE_IMEI_PUSH": imei,
         "DEVICE_FW_VERSION": fwv,
         "DEVICE_LOCAL_CODE": region,
         "DEVICE_MODEL_NAME": model,
