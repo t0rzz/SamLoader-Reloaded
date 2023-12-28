@@ -16,7 +16,7 @@ def main():
     parser = argparse.ArgumentParser(description="Download and query firmware for Samsung devices.")
     parser.add_argument("-m", "--dev-model", help="device model", required=True)
     parser.add_argument("-r", "--dev-region", help="device region code", required=True)
-    parser.add_argument("-n", "--dev-imei", help="device imei code", required=True)
+    parser.add_argument("-i", "--dev-imei", help="device imei code")
     subparsers = parser.add_subparsers(dest="command")
     dload = subparsers.add_parser("download", help="download a firmware")
     dload.add_argument("-v", "--fw-ver", help="firmware version to download", required=True)
@@ -34,6 +34,9 @@ def main():
     decrypt.add_argument("-o", "--out-file", help="decrypted firmware file output", required=True)
     args = parser.parse_args()
     if args.command == "download":
+        if not args.dev_imei:
+            print("imei is required for download, please set with --dev-imei")
+            return 1
         client = fusclient.FUSClient()
         path, filename, size = getbinaryfile(client, args.fw_ver, args.dev_model, args.dev_imei, args.dev_region)
         out = args.out_file if args.out_file else os.path.join(args.out_dir, filename)
