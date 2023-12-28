@@ -75,13 +75,15 @@ def main():
     elif args.command == "checkupdate":
         print(versionfetch.getlatestver(args.dev_model, args.dev_region))
     elif args.command == "decrypt":
-        decrypt_file(args, args.enc_ver, args.in_file, args.out_file)
+        return decrypt_file(args, args.enc_ver, args.in_file, args.out_file)
 
 def decrypt_file(args, version, encrypted, decrypted):
     if version not in [2, 4]:
         raise Exception("Unknown encryption version: {}".format(version))
     getkey = crypt.getv2key if version == 2 else crypt.getv4key
-    key = getkey(args.fw_ver, args.dev_model, args.dev_region)
+    key = getkey(args.fw_ver, args.dev_model, args.dev_region, args.dev_imei)
+    if not key:
+        return 1
     length = os.stat(encrypted).st_size
     with open(encrypted, "rb") as inf, open(decrypted, "wb") as outf:
         crypt.decrypt_progress(inf, outf, key, length)

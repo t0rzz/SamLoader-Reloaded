@@ -15,19 +15,26 @@ from . import versionfetch
 # PKCS#7 unpad
 unpad = lambda d: d[:-d[-1]]
 
-def getv4key(version, model, region):
+def getv4key(version, model, region, imei):
     """ Retrieve the AES key for V4 encryption. """
+    if not imei:
+        print("imei is required for decrypt v4, please set with --dev-imei")
+        return None
     client = fusclient.FUSClient()
     version = versionfetch.normalizevercode(version)
-    req = request.binaryinform(version, model, region, client.nonce)
+    req = request.binaryinform(version, model, region, imei, client.nonce)
     resp = client.makereq("NF_DownloadBinaryInform.do", req)
-    root = ET.fromstring(resp)
-    fwver = root.find("./FUSBody/Results/LATEST_FW_VERSION/Data").text
-    logicval = root.find("./FUSBody/Put/LOGIC_VALUE_FACTORY/Data").text
+    try:
+        root = ET.fromstring(resp)
+        fwver = root.find("./FUSBody/Results/LATEST_FW_VERSION/Data").text
+        logicval = root.find("./FUSBody/Put/LOGIC_VALUE_FACTORY/Data").text
+    except AttributeError:
+        print("Could not get decryption key from servers - bad model/region/imei?")
+        return None
     deckey = request.getlogiccheck(fwver, logicval)
     return hashlib.md5(deckey.encode()).digest()
 
-def getv2key(version, model, region):
+def getv2key(version, model, region, _imei):
     """ Calculate the AES key for V2 (legacy) encryption. """
     deckey = region + ":" + model + ":" + version
     return hashlib.md5(deckey.encode()).digest()
