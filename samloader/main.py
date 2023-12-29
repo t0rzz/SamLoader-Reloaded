@@ -11,12 +11,13 @@ from . import request
 from . import crypt
 from . import fusclient
 from . import versionfetch
+from . import imei
 
 def main():
     parser = argparse.ArgumentParser(description="Download and query firmware for Samsung devices.")
     parser.add_argument("-m", "--dev-model", help="device model", required=True)
     parser.add_argument("-r", "--dev-region", help="device region code", required=True)
-    parser.add_argument("-i", "--dev-imei", help="device imei code")
+    parser.add_argument("-i", "--dev-imei", help="device imei code (guessed from model if possible)")
     subparsers = parser.add_subparsers(dest="command")
     dload = subparsers.add_parser("download", help="download a firmware")
     dload.add_argument("-v", "--fw-ver", help="firmware version to download", required=True)
@@ -33,10 +34,11 @@ def main():
     decrypt.add_argument("-i", "--in-file", help="encrypted firmware file input", required=True)
     decrypt.add_argument("-o", "--out-file", help="decrypted firmware file output", required=True)
     args = parser.parse_args()
+
+    if imei.fixup_imei(args):
+        return 1
+
     if args.command == "download":
-        if not args.dev_imei:
-            print("imei is required for download, please set with --dev-imei")
-            return 1
         client = fusclient.FUSClient()
         path, filename, size = getbinaryfile(client, args.fw_ver, args.dev_model, args.dev_imei, args.dev_region)
         out = args.out_file if args.out_file else os.path.join(args.out_dir, filename)
@@ -49,7 +51,7 @@ def main():
         print("resuming" if args.resume else "downloading", filename)
         if dloffset == size:
             print("already downloaded!")
-            return
+            return 0
         fd = open(out, "ab" if args.resume else "wb")
         initdownload(client, filename)
         r = client.downloadfile(path+filename, dloffset)
@@ -66,7 +68,7 @@ def main():
             dec = out.replace(".enc4", "").replace(".enc2", "") # TODO: use a better way of doing this
             if os.path.isfile(dec):
                 print("file {} already exists, refusing to auto-decrypt!")
-                return
+                return 1
             print("decrypting", out)
             version = 2 if filename.endswith(".enc2") else 4
             decrypt_file(args, version, out, dec)
@@ -76,6 +78,7 @@ def main():
         print(versionfetch.getlatestver(args.dev_model, args.dev_region))
     elif args.command == "decrypt":
         return decrypt_file(args, args.enc_ver, args.in_file, args.out_file)
+    return 0
 
 def decrypt_file(args, version, encrypted, decrypted):
     if version not in [2, 4]:

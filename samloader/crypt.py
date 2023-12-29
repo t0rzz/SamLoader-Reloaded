@@ -17,9 +17,6 @@ unpad = lambda d: d[:-d[-1]]
 
 def getv4key(version, model, region, imei):
     """ Retrieve the AES key for V4 encryption. """
-    if not imei:
-        print("imei is required for decrypt v4, please set with --dev-imei")
-        return None
     client = fusclient.FUSClient()
     version = versionfetch.normalizevercode(version)
     req = request.binaryinform(version, model, region, imei, client.nonce)

@@ -19,26 +19,26 @@ $ pip3 install git+https://github.com/martinetd/samloader.git
 Run with `samloader` or `python3 -m samloader`. See `samloader --help` and
 `samloader (command) --help` for help.
 
-Check the latest firmware version: `-m <model> -r <region> -n <serial/imei number> checkupdate`
+Check the latest firmware version: `-m <model> -r <region> -i <serial/imei number prefix> checkupdate`
 
 Download the specified firmware version for a given phone and region to a
-specified file or directory: `-m <model> -r <region> -n <serial/imei number> download -v <version> (-O
+specified file or directory: `-m <model> -r <region> -i <serial/imei number prefix> download -v <version> (-O
 <output-dir> or -o <output-file>)`
 
-Decrypt encrypted firmware: `-m <model> -r <region> -n <serial/imei number> decrypt -v <version> -V
+Decrypt encrypted firmware: `-m <model> -r <region> -i <serial/imei number prefix> decrypt -v <version> -V
 <enc-version> -i <input-file> -o <output-file>`
 
 ### Example
 
 ```
-$ samloader -m GT-I8190N -r BTU -n 355626052209825 checkupdate           
+$ samloader -m GT-I8190N -r BTU -i 355626052209825 checkupdate
 I8190NXXAMJ2/I8190NBTUAMJ1/I8190NXXAMJ2/I8190NXXAMJ2
 
-$ samloader -m GT-I8190N -r BTU -n 355626052209825 download -v I8190NXXAMJ2/I8190NBTUAMJ1/I8190NXXAMJ2/I8190NXXAMJ2 -O .
+$ samloader -m GT-I8190N -r BTU -i 355626052209825 download -v I8190NXXAMJ2/I8190NBTUAMJ1/I8190NXXAMJ2/I8190NXXAMJ2 -O .
 downloading GT-I8190N_BTU_1_20131118100230_9ae3yzkqmu_fac.zip.enc2
 [################################] 10570/10570 - 00:02:02
 
-$ samloader -m GT-I8190N -r BTU -n 355626052209825 decrypt -v I8190NXXAMJ2/I8190NBTUAMJ1/I8190NXXAMJ2/I8190NXXAMJ2 -V 2 -i GT-I8190N_BTU_1_20131118100230_9ae3yzkqmu_fac.zip.enc2 -o GT-I8190N_BTU_1_20131118100230_9ae3yzkqmu_fac.zip
+$ samloader -m GT-I8190N -r BTU -i 355626052209825 decrypt -v I8190NXXAMJ2/I8190NBTUAMJ1/I8190NXXAMJ2/I8190NXXAMJ2 -V 2 -i GT-I8190N_BTU_1_20131118100230_9ae3yzkqmu_fac.zip.enc2 -o GT-I8190N_BTU_1_20131118100230_9ae3yzkqmu_fac.zip
 [################################] 169115/169115 - 00:00:08
 ```
 
