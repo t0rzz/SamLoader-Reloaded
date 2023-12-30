@@ -45,6 +45,10 @@ def fixup_imei(args):
         print("Please set it or a prefix (at least 8 digits) through -i / --dev-imei")
         return 1
 
+    if not args.dev_imei.isdecimal():
+        # probably a serial number, leave as is
+        return 0
+
     if len(args.dev_imei) < 8:
         print("Need to provide at least 8 digits to have a chance of working")
         return 1
