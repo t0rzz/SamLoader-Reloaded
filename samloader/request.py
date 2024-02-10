@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 def getlogiccheck(inp: str, nonce: str) -> str:
     """ Calculate the request checksum for a given input and nonce. """
     if len(inp) < 16:
-        raise Exception("getlogiccheck() input too short")
+        raise Exception("getlogiccheck() input too short: did you specify the full version?")
     out = ""
     for c in nonce:
         out += inp[ord(c) & 0xf]
