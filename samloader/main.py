@@ -35,57 +35,84 @@ def main():
     decrypt.add_argument("-o", "--out-file", help="decrypted firmware file output", required=True)
     args = parser.parse_args()
 
+    # Fix or validate IMEI/serial early for commands that need it
     if imei.fixup_imei(args):
         return 1
 
-    if args.command == "download":
-        client = fusclient.FUSClient()
-        path, filename, size = getbinaryfile(client, args.fw_ver, args.dev_model, args.dev_imei, args.dev_region)
-        out = args.out_file if args.out_file else os.path.join(args.out_dir, filename)
-        try:
-            dloffset = os.stat(out).st_size if args.resume else 0
-        except FileNotFoundError:
-            args.resume = None
-            dloffset = 0
+    # Defer imports used for error classification
+    import xml.etree.ElementTree as ET
+    import requests
 
-        print("resuming" if args.resume else "downloading", filename)
-        if dloffset == size:
-            print("already downloaded!")
-            return 0
-        initdownload(client, filename)
-        r = client.downloadfile(path+filename, dloffset)
-        if args.show_md5 and "Content-MD5" in r.headers:
+    try:
+        if args.command == "download":
+            client = fusclient.FUSClient()
+            path, filename, size = getbinaryfile(client, args.fw_ver, args.dev_model, args.dev_imei, args.dev_region)
+            out = args.out_file if args.out_file else os.path.join(args.out_dir, filename)
             try:
-                print("MD5:", base64.b64decode(r.headers["Content-MD5"]).hex())
-            except Exception:
-                print("MD5: <unavailable>")
-        pbar = tqdm(total=size, initial=dloffset, unit="B", unit_scale=True)
-        try:
-            with open(out, "ab" if args.resume else "wb") as fd:
-                for chunk in r.iter_content(chunk_size=0x10000):
-                    if not chunk:
-                        continue
-                    fd.write(chunk)
-                    fd.flush()
-                    pbar.update(len(chunk))
-        finally:
-            pbar.close()
-        if args.do_decrypt: # decrypt the file if needed
-            # Remove a single trailing .enc2/.enc4 extension if present
-            dec = out[:-5] if out.lower().endswith(".enc4") else (out[:-5] if out.lower().endswith(".enc2") else out)
-            if os.path.isfile(dec):
-                print(f"file {dec} already exists, refusing to auto-decrypt!")
-                return 1
-            print("decrypting", out)
-            version = 2 if filename.endswith(".enc2") else 4
-            decrypt_file(args, version, out, dec)
-            os.remove(out)
+                dloffset = os.stat(out).st_size if args.resume else 0
+            except FileNotFoundError:
+                args.resume = None
+                dloffset = 0
 
-    elif args.command == "checkupdate":
-        print(versionfetch.getlatestver(args.dev_model, args.dev_region))
-    elif args.command == "decrypt":
-        return decrypt_file(args, args.enc_ver, args.in_file, args.out_file)
-    return 0
+            print("resuming" if args.resume else "downloading", filename)
+            if dloffset == size:
+                print("already downloaded!")
+                return 0
+            initdownload(client, filename)
+            r = client.downloadfile(path+filename, dloffset)
+            if args.show_md5 and "Content-MD5" in r.headers:
+                try:
+                    print("MD5:", base64.b64decode(r.headers["Content-MD5"]).hex())
+                except Exception:
+                    print("MD5: <unavailable>")
+            pbar = tqdm(total=size, initial=dloffset, unit="B", unit_scale=True)
+            try:
+                with open(out, "ab" if args.resume else "wb") as fd:
+                    for chunk in r.iter_content(chunk_size=0x10000):
+                        if not chunk:
+                            continue
+                        fd.write(chunk)
+                        fd.flush()
+                        pbar.update(len(chunk))
+            finally:
+                pbar.close()
+            if args.do_decrypt: # decrypt the file if needed
+                # Remove a single trailing .enc2/.enc4 extension if present
+                dec = out[:-5] if out.lower().endswith(".enc4") else (out[:-5] if out.lower().endswith(".enc2") else out)
+                if os.path.isfile(dec):
+                    print(f"file {dec} already exists, refusing to auto-decrypt!")
+                    return 1
+                print("decrypting", out)
+                version = 2 if filename.endswith(".enc2") else 4
+                decrypt_file(args, version, out, dec)
+                os.remove(out)
+
+        elif args.command == "checkupdate":
+            print(versionfetch.getlatestver(args.dev_model, args.dev_region))
+        elif args.command == "decrypt":
+            return decrypt_file(args, args.enc_ver, args.in_file, args.out_file)
+        return 0
+    except requests.exceptions.Timeout:
+        print("Error: network timeout while contacting the server. Please try again later.")
+        return 2
+    except requests.exceptions.HTTPError as e:
+        status = getattr(getattr(e, 'response', None), 'status_code', None)
+        if status:
+            print(f"Error: HTTP {status} from server.")
+        else:
+            print("Error: HTTP error while contacting the server.")
+        return 2
+    except requests.exceptions.RequestException as e:
+        # Generic requests-level errors (connection, DNS, etc.)
+        print(f"Error: network error: {e}")
+        return 2
+    except ET.ParseError:
+        print("Error: received an invalid or unexpected response from the server.")
+        return 3
+    except Exception as e:
+        # Catch-all to avoid Python tracebacks for users
+        print(f"Error: {e}")
+        return 1
 
 def decrypt_file(args, version, encrypted, decrypted):
     if version not in [2, 4]:
