@@ -2,16 +2,14 @@
 
 Download firmware for Samsung devices (without any extra Windows drivers).
 
-## Low maintenance warning
+## Important notice (active fork)
 
-Given https://github.com/samloader/samloader was archived and this didn't work I just fixed it.
-I'll probably still use it ~ once a year and will try to fix at this point, but don't plan on
-supporting much more than my use case.
+This fork (https://github.com/t0rzz/samloader) contains substantial improvements and is actively maintained compared to the "martinetd" fork. Please use this repository and open issues/PRs here.
 
 ## Installation
 
 ```
-$ pip3 install git+https://github.com/martinetd/samloader.git
+$ pip3 install git+https://github.com/t0rzz/samloader.git
 ```
 
 ## Usage
@@ -60,5 +58,4 @@ Notes:
 
 ## Note
 
-This project was formerly hosted at `nlscc/samloader`, and has moved to
-`samloader/samloader`, and is now currently forked on `martinetd/samloader`...
+This project was originally created at `nlscc/samloader`, later moved to `samloader/samloader`, then forked to `martinetd/samloader`, and is now maintained at `t0rzz/samloader`.

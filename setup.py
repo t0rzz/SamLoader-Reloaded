@@ -11,7 +11,7 @@ setuptools.setup(
     description="A tool to download firmware for Samsung phones.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="",
+    url="https://github.com/t0rzz/samloader",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
