@@ -41,15 +41,19 @@ def decrypt_progress(inf, outf, key, length):
     cipher = AES.new(key, AES.MODE_ECB)
     if length % 16 != 0:
         raise Exception("invalid input block size")
-    chunks = length//4096+1
+    # Number of 4096-byte chunks (ceil division)
+    chunks = (length + 4095) // 4096
     pbar = tqdm(total=length, unit="B", unit_scale=True)
-    for i in range(chunks):
-        block = inf.read(4096)
-        if not block:
-            break
-        decblock = cipher.decrypt(block)
-        if i == chunks - 1:
-            outf.write(unpad(decblock))
-        else:
-            outf.write(decblock)
-        pbar.update(4096)
+    try:
+        for i in range(chunks):
+            block = inf.read(4096)
+            if not block:
+                break
+            decblock = cipher.decrypt(block)
+            if i == chunks - 1:
+                outf.write(unpad(decblock))
+            else:
+                outf.write(decblock)
+            pbar.update(len(block))
+    finally:
+        pbar.close()

@@ -22,6 +22,9 @@ setuptools.setup(
         "console_scripts": [
             "samloader = samloader.main:main",
         ],
+        "gui_scripts": [
+            "samloader-gui = samloader.gui:main",
+        ],
     },
     install_requires=[
         "tqdm",

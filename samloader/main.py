@@ -52,22 +52,29 @@ def main():
         if dloffset == size:
             print("already downloaded!")
             return 0
-        fd = open(out, "ab" if args.resume else "wb")
         initdownload(client, filename)
         r = client.downloadfile(path+filename, dloffset)
         if args.show_md5 and "Content-MD5" in r.headers:
-            print("MD5:", base64.b64decode(r.headers["Content-MD5"]).hex())
+            try:
+                print("MD5:", base64.b64decode(r.headers["Content-MD5"]).hex())
+            except Exception:
+                print("MD5: <unavailable>")
         pbar = tqdm(total=size, initial=dloffset, unit="B", unit_scale=True)
-        for chunk in r.iter_content(chunk_size=0x10000):
-            if chunk:
-                fd.write(chunk)
-                fd.flush()
-                pbar.update(0x10000)
-        fd.close()
+        try:
+            with open(out, "ab" if args.resume else "wb") as fd:
+                for chunk in r.iter_content(chunk_size=0x10000):
+                    if not chunk:
+                        continue
+                    fd.write(chunk)
+                    fd.flush()
+                    pbar.update(len(chunk))
+        finally:
+            pbar.close()
         if args.do_decrypt: # decrypt the file if needed
-            dec = out.replace(".enc4", "").replace(".enc2", "") # TODO: use a better way of doing this
+            # Remove a single trailing .enc2/.enc4 extension if present
+            dec = out[:-5] if out.lower().endswith(".enc4") else (out[:-5] if out.lower().endswith(".enc2") else out)
             if os.path.isfile(dec):
-                print("file {} already exists, refusing to auto-decrypt!")
+                print(f"file {dec} already exists, refusing to auto-decrypt!")
                 return 1
             print("decrypting", out)
             version = 2 if filename.endswith(".enc2") else 4
@@ -90,6 +97,7 @@ def decrypt_file(args, version, encrypted, decrypted):
     length = os.stat(encrypted).st_size
     with open(encrypted, "rb") as inf, open(decrypted, "wb") as outf:
         crypt.decrypt_progress(inf, outf, key, length)
+    return 0
 
 def initdownload(client, filename):
     req = request.binaryinit(filename, client.nonce)

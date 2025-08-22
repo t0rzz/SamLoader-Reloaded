@@ -16,9 +16,13 @@ class FUSClient:
     def makereq(self, path: str, data: str = "") -> str:
         """ Make a FUS request to a given endpoint. """
         authv = 'FUS nonce="", signature="' + self.auth + '", nc="", type="", realm="", newauth="1"'
-        req = requests.post("https://neofussvr.sslcs.cdngc.net/" + path, data=data,
-                            headers={"Authorization": authv, "User-Agent": "Kies2.0_FUS"},
-                            cookies={"JSESSIONID": self.sessid})
+        req = requests.post(
+            "https://neofussvr.sslcs.cdngc.net/" + path,
+            data=data,
+            headers={"Authorization": authv, "User-Agent": "Kies2.0_FUS"},
+            cookies={"JSESSIONID": self.sessid},
+            timeout=30,
+        )
         # If a new NONCE is present, decrypt it and update our auth token.
         if "NONCE" in req.headers:
             self.encnonce = req.headers["NONCE"]
@@ -37,7 +41,12 @@ class FUSClient:
         headers = {"Authorization": authv, "User-Agent": "Kies2.0_FUS"}
         if start > 0:
             headers["Range"] = "bytes={}-".format(start)
-        req = requests.get("http://cloud-neofussvr.samsungmobile.com/NF_DownloadBinaryForMass.do",
-                           params="file=" + filename, headers=headers, stream=True)
+        req = requests.get(
+            "http://cloud-neofussvr.samsungmobile.com/NF_DownloadBinaryForMass.do",
+            params="file=" + filename,
+            headers=headers,
+            stream=True,
+            timeout=60,
+        )
         req.raise_for_status()
         return req
