@@ -19,6 +19,11 @@ CLI: Run with `samloader` or `python3 -m samloader`. See `samloader --help` and
 
 GUI: Run with `samloader-gui` or `python -m samloader.gui` to open a simple graphical interface supporting Check Update, Download, and Decrypt.
 
+List known CSC regions: run `samloader --listregions` to print known CSC codes and names and exit.
+Example:
+- BTU (United Kingdom, no brand)
+- ITV (Italy, no brand)
+
 Check the latest firmware version (prints labeled AP/CSC/CP/Build by default): `-m <model> -r <region> -i <serial/imei number prefix> checkupdate` (use `--raw` to print the original four-part version code)
 
 Download the specified firmware version for a given phone and region to a

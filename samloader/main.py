@@ -15,9 +15,10 @@ from . import imei
 
 def main():
     parser = argparse.ArgumentParser(description="Download and query firmware for Samsung devices.")
-    parser.add_argument("-m", "--dev-model", help="device model", required=True)
-    parser.add_argument("-r", "--dev-region", help="device region code", required=True)
+    parser.add_argument("-m", "--dev-model", help="device model")
+    parser.add_argument("-r", "--dev-region", help="device region code")
     parser.add_argument("-i", "--dev-imei", help="device imei code (guessed from model if possible)")
+    parser.add_argument("--listregions", action="store_true", help="list known CSC regions and exit")
     subparsers = parser.add_subparsers(dest="command")
     dload = subparsers.add_parser("download", help="download a firmware")
     dload.add_argument("-v", "--fw-ver", help="firmware version to download", required=True)
@@ -36,6 +37,17 @@ def main():
     decrypt.add_argument("-o", "--out-file", help="decrypted firmware file output", required=True)
     args = parser.parse_args()
 
+    # Handle standalone region list request early
+    if getattr(args, "listregions", False):
+        try:
+            from .regions import iter_regions_sorted
+            for code, name in iter_regions_sorted():
+                print(f"- {code} ({name})")
+            return 0
+        except Exception as e:
+            print(f"Error: failed to list regions: {e}")
+            return 1
+
     # Fix or validate IMEI/serial early for commands that need it
     if imei.fixup_imei(args):
         return 1
@@ -46,6 +58,9 @@ def main():
 
     try:
         if args.command == "download":
+            if not args.dev_model or not args.dev_region:
+                print("Error: --dev-model and --dev-region are required for download")
+                return 1
             client = fusclient.FUSClient()
             path, filename, size = getbinaryfile(client, args.fw_ver, args.dev_model, args.dev_imei, args.dev_region)
             out = args.out_file if args.out_file else os.path.join(args.out_dir, filename)
@@ -89,6 +104,9 @@ def main():
                 os.remove(out)
 
         elif args.command == "checkupdate":
+            if not args.dev_model or not args.dev_region:
+                print("Error: --dev-model and --dev-region are required for checkupdate")
+                return 1
             ver = versionfetch.getlatestver(args.dev_model, args.dev_region)
             if getattr(args, "raw", False):
                 print(ver)
@@ -104,6 +122,9 @@ def main():
                 print(f"CP: {cp}")
                 print(f"Build: {build}")
         elif args.command == "decrypt":
+            if not args.dev_model or not args.dev_region:
+                print("Error: --dev-model and --dev-region are required for decrypt")
+                return 1
             return decrypt_file(args, args.enc_ver, args.in_file, args.out_file)
         return 0
     except requests.exceptions.Timeout:
