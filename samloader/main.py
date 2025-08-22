@@ -28,6 +28,7 @@ def main():
     dload_out.add_argument("-O", "--out-dir", help="output the server filename to the specified directory")
     dload_out.add_argument("-o", "--out-file", help="output to the specified file")
     chkupd = subparsers.add_parser("checkupdate", help="check for the latest available firmware version")
+    chkupd.add_argument("--raw", action="store_true", help="print raw four-part version code only")
     decrypt = subparsers.add_parser("decrypt", help="decrypt an encrypted firmware")
     decrypt.add_argument("-v", "--fw-ver", help="encrypted firmware version", required=True)
     decrypt.add_argument("-V", "--enc-ver", type=int, choices=[2, 4], default=4, help="encryption version (default 4)")
@@ -88,7 +89,20 @@ def main():
                 os.remove(out)
 
         elif args.command == "checkupdate":
-            print(versionfetch.getlatestver(args.dev_model, args.dev_region))
+            ver = versionfetch.getlatestver(args.dev_model, args.dev_region)
+            if getattr(args, "raw", False):
+                print(ver)
+            else:
+                parts = ver.split("/")
+                # Expect 4 parts after normalization
+                ap = parts[0] if len(parts) > 0 else "-"
+                csc = parts[1] if len(parts) > 1 else "-"
+                cp = parts[2] if len(parts) > 2 else "-"
+                build = parts[3] if len(parts) > 3 else "-"
+                print(f"AP: {ap}")
+                print(f"CSC: {csc}")
+                print(f"CP: {cp}")
+                print(f"Build: {build}")
         elif args.command == "decrypt":
             return decrypt_file(args, args.enc_ver, args.in_file, args.out_file)
         return 0

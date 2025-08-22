@@ -19,7 +19,7 @@ CLI: Run with `samloader` or `python3 -m samloader`. See `samloader --help` and
 
 GUI: Run with `samloader-gui` or `python -m samloader.gui` to open a simple graphical interface supporting Check Update, Download, and Decrypt.
 
-Check the latest firmware version: `-m <model> -r <region> -i <serial/imei number prefix> checkupdate`
+Check the latest firmware version (prints labeled AP/CSC/CP/Build by default): `-m <model> -r <region> -i <serial/imei number prefix> checkupdate` (use `--raw` to print the original four-part version code)
 
 Download the specified firmware version for a given phone and region to a
 specified file or directory: `-m <model> -r <region> -i <serial/imei number prefix> download -v <version> (-O
@@ -32,7 +32,10 @@ Decrypt encrypted firmware: `-m <model> -r <region> -i <serial/imei number prefi
 
 ```
 $ samloader -m GT-I8190N -r BTU -i 355626052209825 checkupdate
-I8190NXXAMJ2/I8190NBTUAMJ1/I8190NXXAMJ2/I8190NXXAMJ2
+AP: I8190NXXAMJ2
+CSC: I8190NBTUAMJ1
+CP: I8190NXXAMJ2
+Build: I8190NXXAMJ2
 
 $ samloader -m GT-I8190N -r BTU -i 355626052209825 download -v I8190NXXAMJ2/I8190NBTUAMJ1/I8190NXXAMJ2/I8190NXXAMJ2 -O .
 downloading GT-I8190N_BTU_1_20131118100230_9ae3yzkqmu_fac.zip.enc2
