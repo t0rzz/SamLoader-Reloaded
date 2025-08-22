@@ -19,8 +19,10 @@ CLI: Run with `samloader` or `python3 -m samloader`. See `samloader --help` and
 
 GUI: Run with `samloader-gui` or `python -m samloader.gui` to open a simple graphical interface supporting Check Update, Download, and Decrypt.
 
-List known CSC regions: run `samloader --listregions` to print known CSC codes and names and exit.
-Example:
+List known CSC regions: run `samloader --listregions` to print known CSC codes and names and exit. The list is comprehensive and maintained:
+- It first tries to fetch the latest list from this repository (t0rzz/samloader) and caches it locally.
+- If offline, it falls back to the cached file, then to a packaged dataset shipped with samloader.
+Example output lines:
 - BTU (United Kingdom, no brand)
 - ITV (Italy, no brand)
 

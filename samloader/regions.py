@@ -1,12 +1,20 @@
 # SPDX-License-Identifier: GPL-3.0+
 """ CSC (region) catalog for Samsung firmware servers.
 
-This list is not exhaustive but covers many commonly used CSC codes.
-Contributions to expand or correct the list are welcome.
+This module provides a comprehensive CSC list for Samsung firmware queries.
+It prefers a remotely maintained dataset (from t0rzz/samloader) with local
+caching, falls back to a packaged JSON file, and finally to a minimal
+built-in list to ensure functionality even offline.
 """
 
-# Map CSC code -> Human-friendly description
-REGION_INFO = {
+from __future__ import annotations
+
+import json
+import os
+from typing import Dict, Iterable, Tuple
+
+# Minimal built-in fallback (guaranteed available)
+_FALLBACK_REGION_INFO: Dict[str, str] = {
     # Unbranded / open market (Europe)
     "AUT": "Switzerland, no brand",
     "ATO": "Austria, no brand",
@@ -66,8 +74,87 @@ REGION_INFO = {
     "VAU": "Australia, Vodafone",
 }
 
-def iter_regions_sorted():
-    """Yield (code, name) pairs sorted by code."""
-    for code in sorted(REGION_INFO.keys()):
-        yield code, REGION_INFO[code]
+_REMOTE_URL = "https://raw.githubusercontent.com/t0rzz/samloader/main/samloader/data/regions.json"
+_CACHE_DIR = os.path.join(os.path.expanduser("~"), ".samloader")
+_CACHE_FILE = os.path.join(_CACHE_DIR, "regions.json")
+
+
+def _load_packaged_regions() -> Dict[str, str]:
+    """Load regions from the packaged JSON file (shipped with the package)."""
+    # Prefer importlib.resources (Py>=3.9 for files()), fall back to pkgutil
+    try:
+        from importlib.resources import files
+        data_path = files("samloader").joinpath("data").joinpath("regions.json")
+        with open(str(data_path), "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:
+        try:
+            import pkgutil
+            data = pkgutil.get_data("samloader", "data/regions.json")
+            if data is not None:
+                return json.loads(data.decode("utf-8"))
+        except Exception:
+            pass
+    return {}
+
+
+def _load_cache() -> Dict[str, str]:
+    try:
+        with open(_CACHE_FILE, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:
+        return {}
+
+
+def _save_cache(regions: Dict[str, str]) -> None:
+    try:
+        os.makedirs(_CACHE_DIR, exist_ok=True)
+        with open(_CACHE_FILE, "w", encoding="utf-8") as fh:
+            json.dump(regions, fh, ensure_ascii=False, indent=2)
+    except Exception:
+        # best-effort; ignore cache write errors
+        pass
+
+
+def _fetch_remote() -> Dict[str, str]:
+    try:
+        import requests
+        resp = requests.get(_REMOTE_URL, timeout=5)
+        resp.raise_for_status()
+        data = resp.json()
+        # ensure mapping of str->str
+        if isinstance(data, dict):
+            return {str(k): str(v) for k, v in data.items()}
+    except Exception:
+        pass
+    return {}
+
+
+def get_regions() -> Dict[str, str]:
+    """Return the best-available CSC mapping.
+
+    Priority: remote → cache → packaged → built-in fallback.
+    """
+    # Try remote (and update cache) only when this module is used
+    regions = _fetch_remote()
+    if regions:
+        _save_cache(regions)
+        return regions
+
+    regions = _load_cache()
+    if regions:
+        return regions
+
+    regions = _load_packaged_regions()
+    if regions:
+        return regions
+
+    return _FALLBACK_REGION_INFO
+
+
+def iter_regions_sorted() -> Iterable[Tuple[str, str]]:
+    """Yield (code, name) pairs sorted by code from the best dataset."""
+    regions = get_regions()
+    for code in sorted(regions.keys()):
+        yield code, regions[code]
 
