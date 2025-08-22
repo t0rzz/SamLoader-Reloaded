@@ -7,6 +7,7 @@ import base64
 import xml.etree.ElementTree as ET
 from tqdm import tqdm
 import threading
+import time
 
 from . import request
 from . import crypt
@@ -27,6 +28,7 @@ def main():
     dload.add_argument("-M", "--show-md5", help="print the expected MD5 hash of the downloaded file", action="store_true")
     dload.add_argument("-D", "--do-decrypt", help="auto-decrypt the downloaded file after downloading", action="store_true")
     dload.add_argument("-T", "--threads", type=int, default=1, help="number of download threads (default: 1)")
+    dload.add_argument("--retries", type=int, default=10, help="max consecutive retry attempts on connection errors (default: 10)")
     dload_out = dload.add_mutually_exclusive_group(required=True)
     dload_out.add_argument("-O", "--out-dir", help="output the server filename to the specified directory")
     dload_out.add_argument("-o", "--out-file", help="output to the specified file")
@@ -165,23 +167,36 @@ def main():
                 stop_event = threading.Event()
                 errors = []
                 def dl_worker(st, en):
-                    try:
-                        r = client.downloadfile(path + filename, st, en)
-                        pos = st
-                        with open(out, "r+b") as fdw:
-                            for chunk in r.iter_content(chunk_size=0x10000):
-                                if stop_event.is_set():
-                                    return
-                                if not chunk:
-                                    continue
-                                fdw.seek(pos)
-                                fdw.write(chunk)
-                                pos += len(chunk)
-                                with pbar_lock:
-                                    pbar.update(len(chunk))
-                    except Exception as e:
-                        errors.append(e)
-                        stop_event.set()
+                    pos = st
+                    attempts = 0
+                    backoff = 1
+                    while pos <= en and not stop_event.is_set():
+                        try:
+                            r = client.downloadfile(path + filename, pos, en)
+                            with open(out, "r+b") as fdw:
+                                for chunk in r.iter_content(chunk_size=0x10000):
+                                    if stop_event.is_set():
+                                        return
+                                    if not chunk:
+                                        continue
+                                    fdw.seek(pos)
+                                    fdw.write(chunk)
+                                    pos += len(chunk)
+                                    with pbar_lock:
+                                        pbar.update(len(chunk))
+                            attempts = 0
+                            backoff = 1
+                            # If stream ended but segment not complete, loop will retry
+                        except Exception as e:
+                            attempts += 1
+                            if attempts > args.retries:
+                                errors.append(e)
+                                stop_event.set()
+                                return
+                            sleep_s = min(60, backoff)
+                            # Avoid noisy logs from threads; just backoff and retry
+                            time.sleep(sleep_s)
+                            backoff *= 2
                 tlist = []
                 for st, en in ranges:
                     t = threading.Thread(target=dl_worker, args=(st, en), daemon=True)
@@ -194,24 +209,57 @@ def main():
                     print(f"Error: download failed: {errors[0]}")
                     return 1
             else:
-                # Fallback to single-threaded download (supports resume)
+                # Fallback to single-threaded download (supports resume + auto-retry)
                 if getattr(args, "threads", 1) > 1 and (args.resume or dloffset > 0):
                     print("Note: resume or existing partial download disables multi-thread; falling back to single-thread.")
-                r = client.downloadfile(path+filename, dloffset)
-                if args.show_md5 and "Content-MD5" in r.headers:
-                    try:
-                        print("MD5:", base64.b64decode(r.headers["Content-MD5"]).hex())
-                    except Exception:
-                        print("MD5: <unavailable>")
+                # Prepare output file
+                if not args.resume:
+                    # Start fresh: truncate file to zero to avoid mixing with old partials
+                    with open(out, "wb"):
+                        pass
+                elif not os.path.exists(out):
+                    # Resume requested but file missing: create it empty and continue from 0
+                    with open(out, "wb"):
+                        pass
+                pos = dloffset
+                attempts = 0
+                backoff = 1
+                md5_printed = False
                 pbar = tqdm(total=size, initial=dloffset, unit="B", unit_scale=True)
                 try:
-                    with open(out, "ab" if args.resume else "wb") as fd:
-                        for chunk in r.iter_content(chunk_size=0x10000):
-                            if not chunk:
-                                continue
-                            fd.write(chunk)
-                            fd.flush()
-                            pbar.update(len(chunk))
+                    while pos < size:
+                        try:
+                            r = client.downloadfile(path+filename, pos)
+                            if args.show_md5 and not md5_printed and "Content-MD5" in r.headers:
+                                try:
+                                    print("MD5:", base64.b64decode(r.headers["Content-MD5"]).hex())
+                                except Exception:
+                                    print("MD5: <unavailable>")
+                                md5_printed = True
+                            with open(out, "r+b") as fd:
+                                fd.seek(pos)
+                                for chunk in r.iter_content(chunk_size=0x10000):
+                                    if not chunk:
+                                        continue
+                                    fd.write(chunk)
+                                    fd.flush()
+                                    pos += len(chunk)
+                                    pbar.update(len(chunk))
+                            # Successful stream; reset attempts and backoff for next loop (if any)
+                            attempts = 0
+                            backoff = 1
+                        except Exception as e:
+                            attempts += 1
+                            if attempts > args.retries:
+                                print(f"Error: download failed after {args.retries} retries: {e}")
+                                return 1
+                            time.sleep(min(60, backoff))
+                            backoff *= 2
+                            # Re-evaluate current pos from disk to avoid duplicating bytes
+                            try:
+                                pos = os.stat(out).st_size
+                            except Exception:
+                                pass
                 finally:
                     pbar.close()
             if args.do_decrypt: # decrypt the file if needed

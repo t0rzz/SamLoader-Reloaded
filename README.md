@@ -35,6 +35,11 @@ specified file or directory: `-m <model> -r <region> -i <serial/imei number pref
 For faster downloads, enable multi-threading with `-T/--threads` (e.g., `-T 8`).
 Note: when `--resume` is used or a partial file already exists, the downloader falls back to single-thread mode.
 
+Automatic resume on connection interruptions:
+- The downloader automatically retries and continues from the last saved byte when a connection breaks (no data loss).
+- Configure the maximum consecutive retry attempts with `--retries` (default: 10). Exponential backoff is applied between attempts.
+- You can also restart the command later with `--resume` to continue from a partially downloaded file.
+
 Decrypt encrypted firmware: `-m <model> -r <region> -i <serial/imei number prefix> decrypt -v <version> -V
 <enc-version> -i <input-file> -o <output-file>`
 
