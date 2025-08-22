@@ -32,6 +32,9 @@ Download the specified firmware version for a given phone and region to a
 specified file or directory: `-m <model> -r <region> -i <serial/imei number prefix> download -v <version> (-O
 <output-dir> or -o <output-file>)`
 
+For faster downloads, enable multi-threading with `-T/--threads` (e.g., `-T 8`).
+Note: when `--resume` is used or a partial file already exists, the downloader falls back to single-thread mode.
+
 Decrypt encrypted firmware: `-m <model> -r <region> -i <serial/imei number prefix> decrypt -v <version> -V
 <enc-version> -i <input-file> -o <output-file>`
 

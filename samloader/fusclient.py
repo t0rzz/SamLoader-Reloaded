@@ -33,14 +33,19 @@ class FUSClient:
             self.sessid = req.cookies["JSESSIONID"]
         req.raise_for_status()
         return req.text
-    def downloadfile(self, filename: str, start: int = 0) -> requests.Response:
-        """ Make a FUS cloud request to download a given file. """
+    def downloadfile(self, filename: str, start: int = 0, end=None) -> requests.Response:
+        """ Make a FUS cloud request to download a given file (optionally a byte range).
+        If 'end' is provided, the Range header will be 'bytes=start-end' (inclusive).
+        """
         # In a cloud request, we also need to pass the server nonce.
         authv = 'FUS nonce="' + self.encnonce + '", signature="' + self.auth \
             + '", nc="", type="", realm="", newauth="1"'
         headers = {"Authorization": authv, "User-Agent": "Kies2.0_FUS"}
-        if start > 0:
-            headers["Range"] = "bytes={}-".format(start)
+        if end is not None or start > 0:
+            if end is None:
+                headers["Range"] = f"bytes={start}-"
+            else:
+                headers["Range"] = f"bytes={start}-{end}"
         req = requests.get(
             "http://cloud-neofussvr.samsungmobile.com/NF_DownloadBinaryForMass.do",
             params="file=" + filename,

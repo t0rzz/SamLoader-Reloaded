@@ -6,6 +6,7 @@ import os
 import base64
 import xml.etree.ElementTree as ET
 from tqdm import tqdm
+import threading
 
 from . import request
 from . import crypt
@@ -25,6 +26,7 @@ def main():
     dload.add_argument("-R", "--resume", help="resume an unfinished download", action="store_true")
     dload.add_argument("-M", "--show-md5", help="print the expected MD5 hash of the downloaded file", action="store_true")
     dload.add_argument("-D", "--do-decrypt", help="auto-decrypt the downloaded file after downloading", action="store_true")
+    dload.add_argument("-T", "--threads", type=int, default=1, help="number of download threads (default: 1)")
     dload_out = dload.add_mutually_exclusive_group(required=True)
     dload_out.add_argument("-O", "--out-dir", help="output the server filename to the specified directory")
     dload_out.add_argument("-o", "--out-file", help="output to the specified file")
@@ -130,23 +132,88 @@ def main():
                 print("already downloaded!")
                 return 0
             initdownload(client, filename)
-            r = client.downloadfile(path+filename, dloffset)
-            if args.show_md5 and "Content-MD5" in r.headers:
+            # Multi-threaded segmented download when requested and starting fresh
+            if getattr(args, "threads", 1) > 1 and not args.resume and dloffset == 0:
+                threads_num = max(1, int(args.threads))
+                # Optionally show MD5 if available (fetch tiny range to get headers)
+                if args.show_md5:
+                    try:
+                        rhead = client.downloadfile(path + filename, 0, 0)
+                        if "Content-MD5" in rhead.headers:
+                            print("MD5:", base64.b64decode(rhead.headers["Content-MD5"]).hex())
+                        rhead.close()
+                    except Exception:
+                        print("MD5: <unavailable>")
+                # Preallocate file
                 try:
-                    print("MD5:", base64.b64decode(r.headers["Content-MD5"]).hex())
+                    with open(out, "wb") as fd:
+                        fd.truncate(size)
                 except Exception:
-                    print("MD5: <unavailable>")
-            pbar = tqdm(total=size, initial=dloffset, unit="B", unit_scale=True)
-            try:
-                with open(out, "ab" if args.resume else "wb") as fd:
-                    for chunk in r.iter_content(chunk_size=0x10000):
-                        if not chunk:
-                            continue
-                        fd.write(chunk)
-                        fd.flush()
-                        pbar.update(len(chunk))
-            finally:
+                    # Fallback preallocation method
+                    with open(out, "wb") as fd:
+                        if size > 0:
+                            fd.seek(size - 1)
+                            fd.write(b"\0")
+                segsize = size // threads_num
+                ranges = []
+                for i in range(threads_num):
+                    start_i = i * segsize
+                    end_i = (start_i + segsize - 1) if i < threads_num - 1 else (size - 1)
+                    ranges.append((start_i, end_i))
+                pbar = tqdm(total=size, initial=0, unit="B", unit_scale=True)
+                pbar_lock = threading.Lock()
+                stop_event = threading.Event()
+                errors = []
+                def dl_worker(st, en):
+                    try:
+                        r = client.downloadfile(path + filename, st, en)
+                        pos = st
+                        with open(out, "r+b") as fdw:
+                            for chunk in r.iter_content(chunk_size=0x10000):
+                                if stop_event.is_set():
+                                    return
+                                if not chunk:
+                                    continue
+                                fdw.seek(pos)
+                                fdw.write(chunk)
+                                pos += len(chunk)
+                                with pbar_lock:
+                                    pbar.update(len(chunk))
+                    except Exception as e:
+                        errors.append(e)
+                        stop_event.set()
+                tlist = []
+                for st, en in ranges:
+                    t = threading.Thread(target=dl_worker, args=(st, en), daemon=True)
+                    t.start()
+                    tlist.append(t)
+                for t in tlist:
+                    t.join()
                 pbar.close()
+                if errors:
+                    print(f"Error: download failed: {errors[0]}")
+                    return 1
+            else:
+                # Fallback to single-threaded download (supports resume)
+                if getattr(args, "threads", 1) > 1 and (args.resume or dloffset > 0):
+                    print("Note: resume or existing partial download disables multi-thread; falling back to single-thread.")
+                r = client.downloadfile(path+filename, dloffset)
+                if args.show_md5 and "Content-MD5" in r.headers:
+                    try:
+                        print("MD5:", base64.b64decode(r.headers["Content-MD5"]).hex())
+                    except Exception:
+                        print("MD5: <unavailable>")
+                pbar = tqdm(total=size, initial=dloffset, unit="B", unit_scale=True)
+                try:
+                    with open(out, "ab" if args.resume else "wb") as fd:
+                        for chunk in r.iter_content(chunk_size=0x10000):
+                            if not chunk:
+                                continue
+                            fd.write(chunk)
+                            fd.flush()
+                            pbar.update(len(chunk))
+                finally:
+                    pbar.close()
             if args.do_decrypt: # decrypt the file if needed
                 # Remove a single trailing .enc2/.enc4 extension if present
                 dec = out[:-5] if out.lower().endswith(".enc4") else (out[:-5] if out.lower().endswith(".enc2") else out)
