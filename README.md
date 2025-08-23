@@ -45,7 +45,9 @@ Automatic resume on connection interruptions:
 Decrypt encrypted firmware: `-m <model> -r <region> -i <serial/imei number prefix> decrypt -v <version> -V
 <enc-version> -i <input-file> -o <output-file>`
 
-### Example
+### Examples
+
+1) Check latest version (labeled output) and decline download
 
 ```
 $ samloader -m GT-I8190N -r BTU -i 355626052209825 checkupdate
@@ -53,13 +55,53 @@ AP: I8190NXXAMJ2
 CSC: I8190NBTUAMJ1
 CP: I8190NXXAMJ2
 Build: I8190NXXAMJ2
+Do you want to download this firmware now? [y/N]: n
+```
 
-$ samloader -m GT-I8190N -r BTU -i 355626052209825 download -v I8190NXXAMJ2/I8190NBTUAMJ1/I8190NXXAMJ2/I8190NXXAMJ2 -O .
-downloading GT-I8190N_BTU_1_20131118100230_9ae3yzkqmu_fac.zip.enc2
-[################################] 10570/10570 - 00:02:02
+2) Check latest version, accept download, then decline decrypt
 
-$ samloader -m GT-I8190N -r BTU -i 355626052209825 decrypt -v I8190NXXAMJ2/I8190NBTUAMJ1/I8190NXXAMJ2/I8190NXXAMJ2 -V 2 -i GT-I8190N_BTU_1_20131118100230_9ae3yzkqmu_fac.zip.enc2 -o GT-I8190N_BTU_1_20131118100230_9ae3yzkqmu_fac.zip
-[################################] 169115/169115 - 00:00:08
+```
+$ samloader -m SM-S918B -r INS -i 356597454257382 checkupdate
+AP: S918BXXU4AXXX
+CSC: S918BOXM4AXXX
+CP: S918BXXU4AXXX
+Build: S918BXXU4AXXX
+Do you want to download this firmware now? [y/N]: y
+downloading SM-S918B_1_20250101010101_abcdefghij_fac.zip.enc4
+[########................] 2.10G/7.80G ...
+Do you want to decrypt it in the current directory? [y/N]: n
+```
+
+3) Download a specific version with multi-threading and retries
+
+```
+$ samloader -m SM-S938B -r INS -i 356597454257382 download \
+    -v S938BXXS5AYG4/S938BOXM5AYG4/S938BXXS5AYG4/S938BXXS5AYG4 \
+    -O firmware -T 8 --retries 10
+Note: resume or existing partial download disables multi-thread; falling back to single-thread.  # only shown if a partial exists
+MD5: <unavailable>  # shown if available from headers
+[########################] 25.9G/25.9G - 00:32:10
+```
+
+4) Decrypt an ENC4 file using long option names (recommended to avoid -i ambiguity)
+
+```
+$ samloader -m SM-S918B -r INS --dev-imei 356597454257382 \
+    decrypt --fw-ver S918BXXU4AXXX/S918BOXM4AXXX/S918BXXU4AXXX/S918BXXU4AXXX \
+    --enc-ver 4 --in-file "C:\\firmware\\SM-S918B_....zip.enc4" \
+    --out-file "C:\\firmware\\SM-S918B_....zip"
+[################################] 7.80G/7.80G - 00:08:12
+```
+
+5) List CSC regions (first lines)
+
+```
+$ samloader --listregions | head -n 5
+- AFG (Afghanistan, no brand)
+- ALB (Albania, no brand)
+- ATO (Austria, no brand)
+- AUT (Switzerland, no brand)
+- BAL (Serbia, no brand)
 ```
 
 ## Building a single-file Windows .exe (GUI)
