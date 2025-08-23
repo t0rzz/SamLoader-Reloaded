@@ -195,8 +195,9 @@ class SamloaderGUI(tk.Tk):
                     self.after(0, lambda: self.lbl_latest.config(text="Latest: request timed out (try again)") )
                     self.after(0, lambda: self.log("Timeout while fetching latest version for", model, region))
                 else:
-                    self.after(0, lambda: messagebox.showerror("Error", str(e)))
-                    self.after(0, lambda: self.log("Error:", e))
+                    err_text = str(e)
+                    self.after(0, lambda msg=err_text: messagebox.showerror("Error", msg))
+                    self.after(0, lambda msg=err_text: self.log("Error:", msg))
             finally:
                 # Restore button regardless of outcome
                 self.after(0, lambda: self.btn_check.config(state=tk.NORMAL, text="Check latest version"))
@@ -276,8 +277,9 @@ class SamloaderGUI(tk.Tk):
                     self.after(0, lambda: self.log("Decryption complete:", dec_out))
 
             except Exception as e:
-                self.after(0, lambda: messagebox.showerror("Error", str(e)))
-                self.after(0, lambda: self.log("Error:", e))
+                err_text = str(e)
+                self.after(0, lambda msg=err_text: messagebox.showerror("Error", msg))
+                self.after(0, lambda msg=err_text: self.log("Error:", msg))
             finally:
                 self.after(0, lambda: self.btn_download.config(state=tk.NORMAL))
                 self.after(0, lambda: self._reset_progress(self.pb_download))
@@ -349,8 +351,9 @@ class SamloaderGUI(tk.Tk):
                     progress_wrapper(inf, outf, key, length)
                 self.after(0, lambda: self.log("Decryption complete:", outfile))
             except Exception as e:
-                self.after(0, lambda: messagebox.showerror("Error", str(e)))
-                self.after(0, lambda: self.log("Error:", e))
+                err_text = str(e)
+                self.after(0, lambda msg=err_text: messagebox.showerror("Error", msg))
+                self.after(0, lambda msg=err_text: self.log("Error:", msg))
             finally:
                 self.after(0, lambda: self.btn_decrypt.config(state=tk.NORMAL))
 
