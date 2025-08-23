@@ -36,7 +36,7 @@ def main():
     chkupd.add_argument("--raw", action="store_true", help="print raw four-part version code only")
     decrypt = subparsers.add_parser("decrypt", help="decrypt an encrypted firmware")
     decrypt.add_argument("-v", "--fw-ver", help="encrypted firmware version", required=True)
-    decrypt.add_argument("-V", "--enc-ver", type=int, choices=[2, 4], default=4, help="encryption version (default 4)")
+    decrypt.add_argument("-V", "--enc-ver", type=int, choices=[2, 4], default=None, help="encryption version (auto-detected if omitted)")
     decrypt.add_argument("-i", "--in-file", help="encrypted firmware file input", required=True)
     decrypt.add_argument("-o", "--out-file", help="decrypted firmware file output", required=True)
     args = parser.parse_args()
@@ -112,9 +112,8 @@ def main():
         parser.print_help()
         return 0
 
-    # Fix or validate IMEI/serial early for commands that need it
-    if imei.fixup_imei(args):
-        return 1
+    # Note: IMEI/serial validation is performed later within each command
+    # (download always; decrypt only if encryption is detected as V4).
 
     # Defer imports used for error classification
     import xml.etree.ElementTree as ET
@@ -124,6 +123,9 @@ def main():
         if args.command == "download":
             if not args.dev_model or not args.dev_region:
                 print("Error: --dev-model and --dev-region are required for download")
+                return 1
+            # Validate/fix IMEI or serial for download
+            if imei.fixup_imei(args):
                 return 1
             client = fusclient.FUSClient()
             path, filename, size = getbinaryfile(client, args.fw_ver, args.dev_model, args.dev_imei, args.dev_region)
@@ -389,7 +391,46 @@ def main():
             if not args.dev_model or not args.dev_region:
                 print("Error: --dev-model and --dev-region are required for decrypt")
                 return 1
-            return decrypt_file(args, args.enc_ver, args.in_file, args.out_file)
+            # Determine encryption version automatically if not provided
+            encver = args.enc_ver
+            infile = args.in_file
+            if encver is None:
+                low = infile.lower()
+                if low.endswith(".enc2"):
+                    encver = 2
+                elif low.endswith(".enc4"):
+                    encver = 4
+                else:
+                    # Heuristic: try V2 first by checking ZIP magic after decrypting the first block
+                    try:
+                        from Cryptodome.Cipher import AES
+                        from . import crypt as _crypt_mod
+                        v2key = _crypt_mod.getv2key(args.fw_ver, args.dev_model, args.dev_region, None)
+                        cipher = AES.new(v2key, AES.MODE_ECB)
+                        with open(infile, "rb") as f:
+                            head = f.read(4096 if os.path.getsize(infile) >= 4096 else 16)
+                        dec = cipher.decrypt(head[:16]) if len(head) >= 16 else b""
+                        if dec.startswith(b"PK\x03\x04"):
+                            encver = 2
+                        else:
+                            encver = 4
+                    except Exception:
+                        # Fallback to v4 if detection fails for any reason
+                        encver = 4
+                print(f"Detected encryption version: V{encver}")
+            # For V4, ensure IMEI/serial is present/valid
+            if encver == 4:
+                # Create a shallow copy-like to set enc_ver for imei logic if needed
+                class _ArgsView:
+                    pass
+                av = _ArgsView()
+                av.__dict__.update(vars(args))
+                av.enc_ver = 4
+                if imei.fixup_imei(av):
+                    return 1
+                # propagate possibly filled imei back
+                args.dev_imei = getattr(av, "dev_imei", args.dev_imei)
+            return decrypt_file(args, encver, args.in_file, args.out_file)
         return 0
     except requests.exceptions.Timeout:
         print("Error: network timeout while contacting the server. Please try again later.")

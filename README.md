@@ -42,8 +42,11 @@ Automatic resume on connection interruptions:
 - Configure the maximum consecutive retry attempts with `--retries` (default: 10). Exponential backoff is applied between attempts.
 - You can also restart the command later with `--resume` to continue from a partially downloaded file.
 
-Decrypt encrypted firmware: `-m <model> -r <region> -i <serial/imei number prefix> decrypt -v <version> -V
-<enc-version> -i <input-file> -o <output-file>`
+Decrypt encrypted firmware: `-m <model> -r <region> -i <serial/imei number prefix> decrypt -v <version> -i <input-file> -o <output-file>`
+- Encryption version is auto-detected:
+  - If the filename ends with .enc2 or .enc4, that version is used.
+  - Otherwise, the tool tries a minimal V2 check by decrypting the first block and looking for the ZIP signature (PK). If it matches, V2 is used; otherwise V4 is assumed.
+- You can still override detection with `--enc-ver 2` or `--enc-ver 4` if needed.
 
 ### Examples
 
@@ -83,13 +86,14 @@ MD5: <unavailable>  # shown if available from headers
 [########################] 25.9G/25.9G - 00:32:10
 ```
 
-4) Decrypt an ENC4 file using long option names (recommended to avoid -i ambiguity)
+4) Decrypt a file (auto-detect enc version; long option names recommended to avoid -i ambiguity)
 
 ```
 $ samloader -m SM-S918B -r INS --dev-imei 355626052209825 \
     decrypt --fw-ver S918BXXU4AXXX/S918BOXM4AXXX/S918BXXU4AXXX/S918BXXU4AXXX \
-    --enc-ver 4 --in-file "C:\\firmware\\SM-S918B_....zip.enc4" \
+    --in-file "C:\\firmware\\SM-S918B_....zip.enc4" \
     --out-file "C:\\firmware\\SM-S918B_....zip"
+Detected encryption version: V4
 [################################] 7.80G/7.80G - 00:08:12
 ```
 
