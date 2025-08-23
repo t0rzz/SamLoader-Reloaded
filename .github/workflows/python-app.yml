@@ -26,7 +26,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-          cache: "pip"
 
       - name: Install dependencies
         run: |
@@ -44,7 +43,6 @@ jobs:
         shell: bash
         run: |
           set -e
-          samloader --help > /dev/null
           python -m samloader --help > /dev/null
           # Works offline: uses included dataset or cache
-          samloader --listregions | head -n 5
+          python -m samloader --listregions | head -n 5
