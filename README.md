@@ -28,6 +28,8 @@ Example output lines:
 
 Check the latest firmware version (prints labeled AP/CSC/CP/Build by default): `-m <model> -r <region> -i <serial/imei number prefix> checkupdate` (use `--raw` to print the original four-part version code)
 
+Interactive flow: after showing the latest version, the CLI asks whether you want to download it now (y/n). If you choose "y", it downloads into the current directory using the server filename. When the download finishes, it asks whether to decrypt the file in the current directory (y/n). IMEI/serial is required by Samsung servers for downloads and ENC4 decrypts.
+
 Download the specified firmware version for a given phone and region to a
 specified file or directory: `-m <model> -r <region> -i <serial/imei number prefix> download -v <version> (-O
 <output-dir> or -o <output-file>)`

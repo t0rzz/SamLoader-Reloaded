@@ -291,6 +291,95 @@ def main():
                 print(f"CSC: {csc}")
                 print(f"CP: {cp}")
                 print(f"Build: {build}")
+            # Interactive flow: ask to download and then to decrypt
+            try:
+                resp = input("Do you want to download this firmware now? [y/N]: ").strip().lower()
+            except EOFError:
+                resp = ""
+            if resp in ("y", "yes"):
+                # Ensure IMEI/serial is available for download
+                class _DLArgs:
+                    pass
+                dlargs = _DLArgs()
+                dlargs.dev_model = args.dev_model
+                dlargs.dev_region = args.dev_region
+                dlargs.dev_imei = getattr(args, "dev_imei", None)
+                dlargs.command = "download"
+                # fixup IMEI (may expand a prefix)
+                if imei.fixup_imei(dlargs):
+                    print("Error: IMEI/serial is required to download. Please re-run with -i/--dev-imei.")
+                    return 1
+                # Start download into current working directory
+                client = fusclient.FUSClient()
+                path, filename, size = getbinaryfile(client, ver, dlargs.dev_model, dlargs.dev_imei, dlargs.dev_region)
+                out = os.path.join(os.getcwd(), filename)
+                try:
+                    dloffset = os.stat(out).st_size
+                except FileNotFoundError:
+                    dloffset = 0
+                print(("resuming" if dloffset else "downloading"), filename)
+                if dloffset == size:
+                    print("already downloaded!")
+                    download_ok = True
+                else:
+                    initdownload(client, filename)
+                    # Prepare output file (resume-aware)
+                    if dloffset == 0:
+                        with open(out, "wb"):
+                            pass
+                    pos = dloffset
+                    attempts = 0
+                    backoff = 1
+                    pbar = tqdm(total=size, initial=dloffset, unit="B", unit_scale=True)
+                    try:
+                        while pos < size:
+                            try:
+                                r = client.downloadfile(path + filename, pos)
+                                with open(out, "r+b") as fd:
+                                    fd.seek(pos)
+                                    for chunk in r.iter_content(chunk_size=0x10000):
+                                        if not chunk:
+                                            continue
+                                        fd.write(chunk)
+                                        fd.flush()
+                                        pos += len(chunk)
+                                        pbar.update(len(chunk))
+                                attempts = 0
+                                backoff = 1
+                            except Exception as e:
+                                attempts += 1
+                                if attempts > 10:
+                                    print(f"Error: download failed after 10 retries: {e}")
+                                    return 1
+                                time.sleep(min(60, backoff))
+                                backoff *= 2
+                                try:
+                                    pos = os.stat(out).st_size
+                                except Exception:
+                                    pass
+                    finally:
+                        pbar.close()
+                    download_ok = (pos >= size)
+                if download_ok:
+                    try:
+                        resp2 = input("Do you want to decrypt it in the current directory? [y/N]: ").strip().lower()
+                    except EOFError:
+                        resp2 = ""
+                    if resp2 in ("y", "yes"):
+                        # Determine enc version from filename
+                        encver = 2 if filename.lower().endswith(".enc2") else 4
+                        dec = out[:-5] if out.lower().endswith(".enc4") else (out[:-5] if out.lower().endswith(".enc2") else out)
+                        if os.path.isfile(dec):
+                            print(f"file {dec} already exists, refusing to decrypt!")
+                            return 1
+                        # Prepare args for decrypt
+                        dlargs.fw_ver = ver
+                        ret = decrypt_file(dlargs, encver, out, dec)
+                        if ret == 0:
+                            print("decryption complete:", dec)
+                        else:
+                            print("Error: decryption failed")
+                            return ret
         elif args.command == "decrypt":
             if not args.dev_model or not args.dev_region:
                 print("Error: --dev-model and --dev-region are required for decrypt")
