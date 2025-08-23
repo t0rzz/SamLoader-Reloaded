@@ -11,7 +11,7 @@ setuptools.setup(
     description="A tool to download firmware for Samsung phones.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/t0rzz/samloader",
+    url="https://github.com/t0rzz/SamLoader-Reloaded",
     packages=setuptools.find_packages(),
     include_package_data=True,
     package_data={

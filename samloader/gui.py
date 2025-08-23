@@ -39,7 +39,7 @@ class ArgsLike:
 class SamloaderGUI(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Samloader GUI")
+        self.title("SamLoader Reloaded")
         self.geometry("720x520")
         self.resizable(True, True)
 

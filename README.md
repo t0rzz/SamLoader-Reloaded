@@ -1,15 +1,15 @@
-# samloader
+# SamLoader Reloaded
 
 Download firmware for Samsung devices (without any extra Windows drivers).
 
 ## Important notice (active fork)
 
-This fork (https://github.com/t0rzz/samloader) contains substantial improvements and is actively maintained compared to the "martinetd" fork. Please use this repository and open issues/PRs here.
+This fork (https://github.com/t0rzz/SamLoader-Reloaded) contains substantial improvements and is actively maintained compared to the "martinetd" fork. Please use this repository and open issues/PRs here.
 
 ## Installation
 
 ```
-$ pip3 install git+https://github.com/t0rzz/samloader.git
+$ pip3 install git+https://github.com/t0rzz/SamLoader-Reloaded.git
 ```
 
 ## Usage
@@ -20,7 +20,7 @@ CLI: Run with `samloader` or `python3 -m samloader`. See `samloader --help` and
 GUI: Run with `samloader-gui` or `python -m samloader.gui` to open a simple graphical interface supporting Check Update, Download, and Decrypt.
 
 List known CSC regions: run `samloader --listregions` to print known CSC codes and names and exit. The list is comprehensive and maintained:
-- It first tries to fetch the latest list from this repository (t0rzz/samloader) and caches it locally.
+- It first tries to fetch the latest list from this repository (t0rzz/SamLoader-Reloaded) and caches it locally.
 - If offline, it falls back to the cached file, then to a packaged dataset shipped with samloader.
 Example output lines:
 - BTU (United Kingdom, no brand)
@@ -121,4 +121,4 @@ Notes:
 
 ## Note
 
-This project was originally created at `nlscc/samloader`, later moved to `samloader/samloader`, then forked to `martinetd/samloader`, and is now maintained at `t0rzz/samloader`.
+This project was originally created at `nlscc/samloader`, later moved to `samloader/samloader`, then forked to `martinetd/samloader`, and is now maintained at `t0rzz/SamLoader-Reloaded`. 

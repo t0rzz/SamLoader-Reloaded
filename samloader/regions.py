@@ -74,7 +74,7 @@ _FALLBACK_REGION_INFO: Dict[str, str] = {
     "VAU": "Australia, Vodafone",
 }
 
-_REMOTE_URL = "https://raw.githubusercontent.com/t0rzz/samloader/main/samloader/data/regions.json"
+_REMOTE_URL = "https://raw.githubusercontent.com/t0rzz/SamLoader-Reloaded/master/samloader/data/regions.json"
 _CACHE_DIR = os.path.join(os.path.expanduser("~"), ".samloader")
 _CACHE_FILE = os.path.join(_CACHE_DIR, "regions.json")
 
