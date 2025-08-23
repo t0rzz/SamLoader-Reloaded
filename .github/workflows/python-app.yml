@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Lint & Smoke tests (py${{ matrix.python }} on ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.8", "3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8
+          pip install .
+
+      - name: Lint with flake8 (syntax/undefined only)
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Treat other issues as warnings:
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Smoke tests (CLI should start and list regions)
+        shell: bash
+        run: |
+          set -e
+          samloader --help > /dev/null
+          python -m samloader --help > /dev/null
+          # Works offline: uses included dataset or cache
+          samloader --listregions | head -n 5
