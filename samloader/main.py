@@ -107,6 +107,11 @@ def main():
             print(f"Error: failed to list regions: {e}")
             return 1
 
+    # If no subcommand was provided, show usage and exit
+    if not args.command:
+        parser.print_help()
+        return 0
+
     # Fix or validate IMEI/serial early for commands that need it
     if imei.fixup_imei(args):
         return 1
