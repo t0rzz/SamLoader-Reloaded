@@ -9,11 +9,21 @@ from tkinter import ttk, filedialog, messagebox
 from dataclasses import dataclass
 from typing import Optional
 
-from . import versionfetch
-from . import fusclient
-from . import crypt
-from . import imei
-from .main import getbinaryfile, initdownload, decrypt_file
+# Support running as part of the package (python -m samloader.gui) and as a standalone script bundled by PyInstaller
+try:
+    from . import versionfetch
+    from . import fusclient
+    from . import crypt
+    from . import imei
+    from .main import getbinaryfile, initdownload, decrypt_file
+except Exception:
+    # When executed as a script without package context (e.g., PyInstaller using samloader\gui.py),
+    # fall back to absolute imports from the bundled "samloader" package.
+    import samloader.versionfetch as versionfetch
+    import samloader.fusclient as fusclient
+    import samloader.crypt as crypt
+    import samloader.imei as imei
+    from samloader.main import getbinaryfile, initdownload, decrypt_file
 
 
 @dataclass

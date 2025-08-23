@@ -72,6 +72,7 @@ You can create a single-file executable for Windows using PyInstaller:
 
 Notes:
 - The GUI uses Tkinter (bundled with most Python installs on Windows).
+- The GUI module supports both package and standalone execution, so building directly from `samloader\gui.py` works with PyInstaller (no import errors).
 - For downloading and decrypting, an IMEI prefix (>= 8 digits) or serial is required by Samsung servers; the GUI follows the same rules as the CLI.
 
 ## Note
