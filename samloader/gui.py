@@ -134,13 +134,16 @@ class SamloaderGUI(tk.Tk):
         # Log box
         logframe = ttk.LabelFrame(self, text="Log")
         logframe.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0,10))
-        self.txt_log = tk.Text(logframe, height=8, state=tk.NORMAL)
+        self.txt_log = tk.Text(logframe, height=8, state=tk.DISABLED)
         self.txt_log.pack(fill=tk.BOTH, expand=True)
 
     # Utility methods
     def log(self, *args):
         msg = " ".join(str(a) for a in args)
+        # Temporarily enable the widget to insert, then disable to keep it read-only
+        self.txt_log.configure(state=tk.NORMAL)
         self.txt_log.insert(tk.END, msg + "\n")
+        self.txt_log.configure(state=tk.DISABLED)
         self.txt_log.see(tk.END)
         self.update_idletasks()
 
