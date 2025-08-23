@@ -20,7 +20,7 @@ def getlatestver(model: str, region: str) -> str:
     req = requests.get(
         "https://fota-cloud-dn.ospserver.net/firmware/" + region + "/" + model + "/version.xml",
         headers={'User-Agent': 'curl/7.87.0'},
-        timeout=15,
+        timeout=10,
     )
     if req.status_code == 403:
         raise Exception("Model or region not found (403)")

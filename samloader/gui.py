@@ -179,8 +179,18 @@ class SamloaderGUI(tk.Tk):
                 self.after(0, lambda: self.lbl_latest.config(text=f"Latest: {latest}"))
                 self.after(0, lambda: self.log("Latest version:", latest))
             except Exception as e:
-                self.after(0, lambda: messagebox.showerror("Error", str(e)))
-                self.after(0, lambda: self.log("Error:", e))
+                # Suppress messagebox for timeouts; just log and update UI politely
+                try:
+                    import requests
+                    is_timeout = isinstance(e, requests.exceptions.Timeout)
+                except Exception:
+                    is_timeout = False
+                if is_timeout:
+                    self.after(0, lambda: self.lbl_latest.config(text="Latest: request timed out (try again)") )
+                    self.after(0, lambda: self.log("Timeout while fetching latest version for", model, region))
+                else:
+                    self.after(0, lambda: messagebox.showerror("Error", str(e)))
+                    self.after(0, lambda: self.log("Error:", e))
         threading.Thread(target=worker, daemon=True).start()
 
     def on_download(self):
