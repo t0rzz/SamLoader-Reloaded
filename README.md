@@ -61,7 +61,7 @@ Do you want to download this firmware now? [y/N]: n
 2) Check latest version, accept download, then decline decrypt
 
 ```
-$ samloader -m SM-S918B -r INS -i 356597454257382 checkupdate
+$ samloader -m SM-S918B -r INS -i 355626052209825 checkupdate
 AP: S918BXXU4AXXX
 CSC: S918BOXM4AXXX
 CP: S918BXXU4AXXX
@@ -75,7 +75,7 @@ Do you want to decrypt it in the current directory? [y/N]: n
 3) Download a specific version with multi-threading and retries
 
 ```
-$ samloader -m SM-S938B -r INS -i 356597454257382 download \
+$ samloader -m SM-S938B -r INS -i 355626052209825 download \
     -v S938BXXS5AYG4/S938BOXM5AYG4/S938BXXS5AYG4/S938BXXS5AYG4 \
     -O firmware -T 8 --retries 10
 Note: resume or existing partial download disables multi-thread; falling back to single-thread.  # only shown if a partial exists
@@ -86,7 +86,7 @@ MD5: <unavailable>  # shown if available from headers
 4) Decrypt an ENC4 file using long option names (recommended to avoid -i ambiguity)
 
 ```
-$ samloader -m SM-S918B -r INS --dev-imei 356597454257382 \
+$ samloader -m SM-S918B -r INS --dev-imei 355626052209825 \
     decrypt --fw-ver S918BXXU4AXXX/S918BOXM4AXXX/S918BXXU4AXXX/S918BXXU4AXXX \
     --enc-ver 4 --in-file "C:\\firmware\\SM-S918B_....zip.enc4" \
     --out-file "C:\\firmware\\SM-S918B_....zip"
