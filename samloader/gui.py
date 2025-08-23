@@ -15,6 +15,7 @@ try:
     from . import fusclient
     from . import crypt
     from . import imei
+    from . import __version__ as VERSION
     from .main import getbinaryfile, initdownload, decrypt_file
 except Exception:
     # When executed as a script without package context (e.g., PyInstaller using samloader\gui.py),
@@ -23,6 +24,10 @@ except Exception:
     import samloader.fusclient as fusclient
     import samloader.crypt as crypt
     import samloader.imei as imei
+    try:
+        from samloader import __version__ as VERSION
+    except Exception:
+        VERSION = "?"
     from samloader.main import getbinaryfile, initdownload, decrypt_file
 
 
@@ -39,7 +44,10 @@ class ArgsLike:
 class SamloaderGUI(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("SamLoader Reloaded")
+        try:
+            self.title(f"SamLoader Reloaded v{VERSION}")
+        except Exception:
+            self.title("SamLoader Reloaded")
         self.geometry("720x520")
         self.resizable(True, True)
 
