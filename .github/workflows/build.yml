@@ -1,0 +1,46 @@
+name: Build GUI
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-gui:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+          cache-dependency-path: |
+            setup.py
+
+      - name: Install build deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install . pyinstaller
+
+      - name: Build GUI exe
+        run: |
+          pyinstaller --noconfirm --onefile --windowed -n samloader-gui --collect-data certifi --add-data "samloader\data\regions.json;samloader\data" samloader\gui.py
+
+      - name: Upload artifact (backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: samloader-gui-${{ github.ref_name }}-win
+          path: dist/samloader-gui.exe
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/samloader-gui.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
