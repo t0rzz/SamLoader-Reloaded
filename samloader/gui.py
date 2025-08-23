@@ -70,7 +70,8 @@ class SamloaderGUI(tk.Tk):
         self.tab_check = ttk.Frame(tabs)
         tabs.add(self.tab_check, text="Check Update")
 
-        ttk.Button(self.tab_check, text="Check latest version", command=self.on_check_update).pack(anchor=tk.W, padx=10, pady=10)
+        self.btn_check = ttk.Button(self.tab_check, text="Check latest version", command=self.on_check_update)
+        self.btn_check.pack(anchor=tk.W, padx=10, pady=10)
         self.lbl_latest = ttk.Label(self.tab_check, text="Latest: -")
         self.lbl_latest.pack(anchor=tk.W, padx=10)
 
@@ -173,6 +174,8 @@ class SamloaderGUI(tk.Tk):
         if not common:
             return
         model, region, _ = common
+        # Disable button and show progress label while checking
+        self.btn_check.config(state=tk.DISABLED, text="Checking")
         def worker():
             try:
                 latest = versionfetch.getlatestver(model, region)
@@ -191,6 +194,9 @@ class SamloaderGUI(tk.Tk):
                 else:
                     self.after(0, lambda: messagebox.showerror("Error", str(e)))
                     self.after(0, lambda: self.log("Error:", e))
+            finally:
+                # Restore button regardless of outcome
+                self.after(0, lambda: self.btn_check.config(state=tk.NORMAL, text="Check latest version"))
         threading.Thread(target=worker, daemon=True).start()
 
     def on_download(self):
