@@ -41,6 +41,39 @@ class ArgsLike:
     fw_ver: Optional[str] = None
 
 
+class Tooltip:
+    def __init__(self, widget, text: str, wraplength: int = 380):
+        self.widget = widget
+        self.text = text
+        self.wraplength = wraplength
+        self._tip = None
+        self.widget.bind("<Enter>", self._show)
+        self.widget.bind("<Leave>", self._hide)
+        self.widget.bind("<ButtonPress>", self._hide)
+
+    def _show(self, event=None):
+        if self._tip is not None:
+            return
+        # Position near the widget
+        x = self.widget.winfo_rootx() + 10
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
+        tip = tk.Toplevel(self.widget)
+        tip.wm_overrideredirect(True)
+        tip.wm_geometry(f"+{x}+{y}")
+        frame = ttk.Frame(tip, padding=6, relief=tk.SOLID, borderwidth=1)
+        frame.pack()
+        lbl = ttk.Label(frame, text=self.text, justify=tk.LEFT, wraplength=self.wraplength)
+        lbl.pack()
+        self._tip = tip
+
+    def _hide(self, event=None):
+        if self._tip is not None:
+            try:
+                self._tip.destroy()
+            except Exception:
+                pass
+            self._tip = None
+
 class SamloaderGUI(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -58,17 +91,48 @@ class SamloaderGUI(tk.Tk):
         common = ttk.LabelFrame(self, text="Device")
         common.pack(fill=tk.X, padx=10, pady=10)
 
+        # Model
         ttk.Label(common, text="Model").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
         self.var_model = tk.StringVar()
         ttk.Entry(common, textvariable=self.var_model, width=20).grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
+        lbl_info_model = ttk.Label(common, text="ⓘ", cursor="question_arrow")
+        lbl_info_model.grid(row=0, column=2, sticky=tk.W, padx=(0,5), pady=5)
+        Tooltip(lbl_info_model, (
+            "Method 1: Check the Settings app\n"
+            "-    Open the Settings app on your Samsung Galaxy device.\n"
+            "-    Scroll down and tap 'About phone' or 'About device'.\n"
+            "-    Look for the 'Model number' or 'Model name' information.\n"
+            "Method 2: Check the back of your Samsung phone."
+        ))
 
-        ttk.Label(common, text="Region").grid(row=0, column=2, sticky=tk.W, padx=5, pady=5)
+        # Region (CSC)
+        ttk.Label(common, text="Region").grid(row=0, column=3, sticky=tk.W, padx=5, pady=5)
         self.var_region = tk.StringVar()
-        ttk.Entry(common, textvariable=self.var_region, width=10).grid(row=0, column=3, sticky=tk.W, padx=5, pady=5)
+        ttk.Entry(common, textvariable=self.var_region, width=10).grid(row=0, column=4, sticky=tk.W, padx=5, pady=5)
+        lbl_info_region = ttk.Label(common, text="ⓘ", cursor="question_arrow")
+        lbl_info_region.grid(row=0, column=5, sticky=tk.W, padx=(0,5), pady=5)
+        Tooltip(lbl_info_region, (
+            "CSC (Customer/Carrier code): a 3-letter region code like BTU (UK), ITV (Italy).\n"
+            "How to find it:\n"
+            "- Settings > About phone > Software information > Service provider software version (look for codes like INS/INS,OXM/INS).\n"
+            "- Sometimes printed on the device box or carrier docs.\n"
+            "- You can also run 'samloader --listregions' to browse known CSC codes."
+        ))
 
-        ttk.Label(common, text="IMEI prefix or serial").grid(row=0, column=4, sticky=tk.W, padx=5, pady=5)
+        # IMEI/serial
+        ttk.Label(common, text="IMEI prefix or serial").grid(row=0, column=6, sticky=tk.W, padx=5, pady=5)
         self.var_imei = tk.StringVar()
-        ttk.Entry(common, textvariable=self.var_imei, width=22).grid(row=0, column=5, sticky=tk.W, padx=5, pady=5)
+        ttk.Entry(common, textvariable=self.var_imei, width=22).grid(row=0, column=7, sticky=tk.W, padx=5, pady=5)
+        lbl_info_imei = ttk.Label(common, text="ⓘ", cursor="question_arrow")
+        lbl_info_imei.grid(row=0, column=8, sticky=tk.W, padx=(0,5), pady=5)
+        Tooltip(lbl_info_imei, (
+            "How to find your IMEI/serial:\n"
+            "- Dial *#06# on the phone to show IMEI.\n"
+            "- Or go to Settings > About phone > Status.\n"
+            "Notes:\n"
+            "- You may enter a serial instead of IMEI.\n"
+            "- IMEI prefix (>= 8 digits) is accepted; the tool completes it and adds the Luhn checksum automatically."
+        ))
 
         # Tabs
         tabs = ttk.Notebook(self)
