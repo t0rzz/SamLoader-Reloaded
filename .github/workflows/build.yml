@@ -28,6 +28,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install . pyinstaller
 
+      - name: Get version
+        id: getver
+        run: |
+          $ver = python -c "import samloader; print(samloader.__version__)"
+          echo "ver=$ver" >> $env:GITHUB_OUTPUT
+
       - name: Build GUI exe
         run: |
           pyinstaller --noconfirm --onefile --windowed -n samloader-gui --collect-data certifi --add-data "samloader\data\regions.json;samloader\data" samloader\gui.py
@@ -35,15 +41,14 @@ jobs:
       - name: Upload artifact (backup)
         uses: actions/upload-artifact@v4
         with:
-          name: samloader-gui-${{ github.ref_name }}-win
+          name: samloader-gui-${{ steps.getver.outputs.ver }}-win
           path: dist/samloader-gui.exe
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
+          token: ${{ secrets.T0RZZ_TOKEN }}
           tag_name: ${{ github.ref_name }}
-          name: "SamLoader GUI ${{ github.ref_name }}"
+          name: "SamLoader GUI ${{ steps.getver.outputs.ver }}"
           files: |
             dist/samloader-gui.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
