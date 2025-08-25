@@ -28,8 +28,28 @@ def build_reqbody(fusmsg: ET.Element, params: dict):
         sedata = ET.SubElement(setag, "Data")
         sedata.text = str(value)
 
+def _effective_local_code(fwv: str, region: str) -> str:
+    """Return the effective DEVICE_LOCAL_CODE for BinaryInform.
+    Some multi-CSC packages require using the multi-CSC code from the CSC build
+    (e.g., OXM/OXA/OWO/OMC) rather than the sales code (e.g., INS/BTU).
+    If the CSC part of the version embeds one of these tokens, prefer it.
+    Otherwise, use the provided region.
+    """
+    try:
+        parts = (fwv or "").split("/")
+        csc_build = parts[1] if len(parts) > 1 else ""
+        tokens = ("OXM", "OXA", "OWO", "OMC")
+        for t in tokens:
+            if t in csc_build:
+                return t
+    except Exception:
+        pass
+    return region
+
+
 def binaryinform(fwv: str, model: str, region: str, imei: str, nonce: str) -> str:
     """ Build a BinaryInform request. """
+    local_code = _effective_local_code(fwv, region)
     fusmsg = ET.Element("FUSMsg")
     build_reqhdr(fusmsg)
     build_reqbody(fusmsg, {
@@ -39,7 +59,7 @@ def binaryinform(fwv: str, model: str, region: str, imei: str, nonce: str) -> st
         "CLIENT_VERSION": "4.3.23123_1",
         "DEVICE_IMEI_PUSH": imei,
         "DEVICE_FW_VERSION": fwv,
-        "DEVICE_LOCAL_CODE": region,
+        "DEVICE_LOCAL_CODE": local_code,
         "DEVICE_MODEL_NAME": model,
         "LOGIC_CHECK": getlogiccheck(fwv, nonce)
     })
