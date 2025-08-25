@@ -1,2 +1,2 @@
 # Package version for SamLoader Reloaded
-__version__ = "0.16.2"
+__version__ = "0.16.3"
