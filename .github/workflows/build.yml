@@ -93,9 +93,10 @@ jobs:
       - name: Create/Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          token: ${{ secrets.T0RZZ_TOKEN }}
           tag_name: ${{ steps.tagvars.outputs.tag }}
           name: "SamLoader GUI ${{ steps.getver.outputs.ver }}"
           generate_release_notes: true
           files: |
             dist/samloader-gui.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.T0RZZ_TOKEN != '' && secrets.T0RZZ_TOKEN || secrets.GITHUB_TOKEN }}
