@@ -16,6 +16,7 @@ try:
     from . import crypt
     from . import imei
     from . import __version__ as VERSION
+    from .regions import get_regions as get_csc_regions
     from .main import getbinaryfile, initdownload, decrypt_file
 except Exception:
     # When executed as a script without package context (e.g., PyInstaller using samloader\gui.py),
@@ -28,6 +29,7 @@ except Exception:
         from samloader import __version__ as VERSION
     except Exception:
         VERSION = "?"
+    from samloader.regions import get_regions as get_csc_regions
     from samloader.main import getbinaryfile, initdownload, decrypt_file
 
 
@@ -86,6 +88,96 @@ class SamloaderGUI(tk.Tk):
 
         self._build_ui()
 
+    # --- Region helpers: auto-complete and picker ---
+    def _on_region_typed(self, event=None):
+        # Uppercase enforce
+        text = self.var_region.get()
+        up = text.upper()
+        if text != up:
+            # Preserve cursor index
+            try:
+                idx = self.cmb_region.index(tk.INSERT)
+            except Exception:
+                idx = None
+            self.var_region.set(up)
+            if idx is not None:
+                try:
+                    self.cmb_region.icursor(idx)
+                except Exception:
+                    pass
+        q = up.strip()
+        # Filter values: codes starting with q or names containing q
+        if not q:
+            values = self._all_region_codes
+        else:
+            values = [c for c in self._all_region_codes if c.startswith(q)]
+            if self._regions_map:
+                # Also include codes whose names contain the query (case-insensitive)
+                name_hits = [c for c, nm in self._regions_map.items() if q.lower() in nm.lower()]
+                # Merge keeping order and uniqueness
+                for c in name_hits:
+                    if c not in values:
+                        values.append(c)
+        self.cmb_region['values'] = values
+
+    def _open_region_picker(self):
+        top = tk.Toplevel(self)
+        top.title("Select Region (CSC)")
+        top.geometry("420x360")
+        frm = ttk.Frame(top, padding=8)
+        frm.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(frm, text="Search").pack(anchor=tk.W)
+        sv = tk.StringVar()
+        ent = ttk.Entry(frm, textvariable=sv)
+        ent.pack(fill=tk.X, pady=4)
+        lst = tk.Listbox(frm, activestyle='dotbox')
+        lst.pack(fill=tk.BOTH, expand=True)
+        btns = ttk.Frame(frm)
+        btns.pack(fill=tk.X, pady=6)
+        def populate(filter_text: str = ""):
+            lst.delete(0, tk.END)
+            items = []
+            codes = self._all_region_codes
+            if not codes and self._regions_map:
+                codes = sorted(self._regions_map.keys())
+            f = filter_text.strip()
+            if f:
+                fu = f.upper()
+                items = [c for c in codes if c.startswith(fu)]
+                # add name matches
+                if self._regions_map:
+                    name_hits = [c for c, nm in self._regions_map.items() if f.lower() in nm.lower()]
+                    for c in name_hits:
+                        if c not in items:
+                            items.append(c)
+            else:
+                items = codes
+            for c in items:
+                name = self._regions_map.get(c, "") if self._regions_map else ""
+                disp = f"{c} ({name})" if name else c
+                lst.insert(tk.END, disp)
+        def on_search(*_):
+            populate(sv.get())
+        def choose_and_close():
+            sel = lst.curselection()
+            if not sel:
+                top.destroy()
+                return
+            line = lst.get(sel[0])
+            code = line.split()[0]
+            self.var_region.set(code)
+            # ensure combobox values reflect current filter
+            self._on_region_typed()
+            top.destroy()
+        def on_double(_):
+            choose_and_close()
+        ttk.Button(btns, text="OK", command=choose_and_close).pack(side=tk.RIGHT, padx=4)
+        ttk.Button(btns, text="Cancel", command=top.destroy).pack(side=tk.RIGHT)
+        ent.bind("<KeyRelease>", on_search)
+        lst.bind("<Double-Button-1>", on_double)
+        populate("")
+        ent.focus_set()
+
     def _build_ui(self):
         # Common frame for device info
         common = ttk.LabelFrame(self, text="Device")
@@ -105,10 +197,21 @@ class SamloaderGUI(tk.Tk):
             "Method 2: Check the back of your Samsung phone."
         ))
 
-        # Region (CSC)
+        # Region (CSC) with auto-complete and picker
         ttk.Label(common, text="Region").grid(row=0, column=3, sticky=tk.W, padx=5, pady=5)
         self.var_region = tk.StringVar()
-        ttk.Entry(common, textvariable=self.var_region, width=10).grid(row=0, column=4, sticky=tk.W, padx=5, pady=5)
+        # Preload CSC regions mapping and list of codes
+        try:
+            self._regions_map = get_csc_regions()  # code -> name
+        except Exception:
+            self._regions_map = {}
+        self._all_region_codes = sorted(list(self._regions_map.keys())) if self._regions_map else []
+        # Auto-complete combobox (codes)
+        self.cmb_region = ttk.Combobox(common, textvariable=self.var_region, width=10, values=self._all_region_codes)
+        self.cmb_region.grid(row=0, column=4, sticky=tk.W, padx=5, pady=5)
+        # Uppercase enforcement and dynamic filtering
+        self.cmb_region.bind("<KeyRelease>", self._on_region_typed)
+        # Region info tooltip
         lbl_info_region = ttk.Label(common, text="ⓘ", cursor="question_arrow")
         lbl_info_region.grid(row=0, column=5, sticky=tk.W, padx=(0,5), pady=5)
         Tooltip(lbl_info_region, (
@@ -118,13 +221,15 @@ class SamloaderGUI(tk.Tk):
             "- Sometimes printed on the device box or carrier docs.\n"
             "- You can also run 'samloader --listregions' to browse known CSC codes."
         ))
+        # Browse button opens a searchable picker with code+name
+        ttk.Button(common, text="Browse…", command=self._open_region_picker).grid(row=0, column=6, sticky=tk.W, padx=5, pady=5)
 
         # IMEI/serial
-        ttk.Label(common, text="IMEI prefix or serial").grid(row=0, column=6, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(common, text="IMEI prefix or serial").grid(row=0, column=7, sticky=tk.W, padx=5, pady=5)
         self.var_imei = tk.StringVar()
-        ttk.Entry(common, textvariable=self.var_imei, width=22).grid(row=0, column=7, sticky=tk.W, padx=5, pady=5)
+        ttk.Entry(common, textvariable=self.var_imei, width=22).grid(row=0, column=8, sticky=tk.W, padx=5, pady=5)
         lbl_info_imei = ttk.Label(common, text="ⓘ", cursor="question_arrow")
-        lbl_info_imei.grid(row=0, column=8, sticky=tk.W, padx=(0,5), pady=5)
+        lbl_info_imei.grid(row=0, column=9, sticky=tk.W, padx=(0,5), pady=5)
         Tooltip(lbl_info_imei, (
             "How to find your IMEI/serial:\n"
             "- Dial *#06# on the phone to show IMEI.\n"
