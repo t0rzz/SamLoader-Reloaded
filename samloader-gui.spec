@@ -1,8 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_data_files
 
-# Include packaged region data and certifi bundle
-# Rely on PyInstaller's built-in Kivy hooks and CLI flags (e.g., --collect-all kivy)
+# Include packaged region data and certifi bundle.
+# Rely on PyInstaller's built-in Kivy hooks and the CLI flag `--collect-all kivy` when invoking pyinstaller.
 datas = [('samloader\\data\\regions.json', 'samloader\\data')]
 binaries = []
 hiddenimports = []
