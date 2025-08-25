@@ -47,9 +47,12 @@ def _effective_local_code(fwv: str, region: str) -> str:
     return region
 
 
-def binaryinform(fwv: str, model: str, region: str, imei: str, nonce: str) -> str:
-    """ Build a BinaryInform request. """
-    local_code = _effective_local_code(fwv, region)
+def binaryinform(fwv: str, model: str, region: str, imei: str, nonce: str, use_region_local_code: bool = False) -> str:
+    """ Build a BinaryInform request.
+    If use_region_local_code is True, force DEVICE_LOCAL_CODE to the provided region.
+    Otherwise, prefer the effective multi-CSC token inferred from the CSC build.
+    """
+    local_code = region if use_region_local_code else _effective_local_code(fwv, region)
     fusmsg = ET.Element("FUSMsg")
     build_reqhdr(fusmsg)
     build_reqbody(fusmsg, {

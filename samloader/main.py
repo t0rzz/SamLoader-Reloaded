@@ -477,12 +477,28 @@ def getbinaryfile(client, fw, model, imei, region):
         fw = normalizevercode(fw)
     except Exception:
         pass
-    req = request.binaryinform(fw, model, region, imei, client.nonce)
+    # First try with effective multi-CSC local code (OXM/OXA/OWO/OMC/EUX when applicable)
+    req = request.binaryinform(fw, model, region, imei, client.nonce, use_region_local_code=False)
     resp = client.makereq("NF_DownloadBinaryInform.do", req)
     root = ET.fromstring(resp)
     status = int(root.find("./FUSBody/Results/Status").text)
     if status != 200:
-        raise Exception("DownloadBinaryInform returned {}, firmware could not be found?".format(status))
+        # Fallback: retry forcing the sales CSC as DEVICE_LOCAL_CODE
+        try:
+            effective = request._effective_local_code(fw, region)
+        except Exception:
+            effective = region
+        if effective != region:
+            req2 = request.binaryinform(fw, model, region, imei, client.nonce, use_region_local_code=True)
+            resp2 = client.makereq("NF_DownloadBinaryInform.do", req2)
+            root2 = ET.fromstring(resp2)
+            status2 = int(root2.find("./FUSBody/Results/Status").text)
+            if status2 == 200:
+                root = root2
+            else:
+                raise Exception(f"DownloadBinaryInform returned {status} (local_code={effective}) and {status2} (local_code={region}), firmware could not be found?")
+        else:
+            raise Exception(f"DownloadBinaryInform returned {status}, firmware could not be found?")
     filename = root.find("./FUSBody/Put/BINARY_NAME/Data").text
     if filename is None:
         raise Exception("DownloadBinaryInform failed to find a firmware bundle")
