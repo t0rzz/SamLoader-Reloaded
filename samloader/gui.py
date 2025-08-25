@@ -4,6 +4,7 @@
 
 import os
 import threading
+import time
 from dataclasses import dataclass
 from typing import Optional, Dict
 
@@ -92,6 +93,18 @@ class MainWindow(QMainWindow):
         self._regions_map: Dict[str, str] = {}
         self._all_region_codes = []
 
+        # Download stats and last-download context
+        self._dl_total = 0
+        self._dl_done_bytes = 0
+        self._dl_start_time = 0.0
+        self._current_fwver = None
+        self._current_outdir = None
+        self._last_download_path = None
+        self._last_download_fwver = None
+        self._last_download_outdir = None
+        self._last_download_encver = None
+        self._dl_start_base = 0
+
         self._build_ui()
 
     # UI building
@@ -158,12 +171,12 @@ class MainWindow(QMainWindow):
         grid.addWidget(lbl_imei_info, 0, 9)
 
         # Tabs
-        tabs = QTabWidget()
-        v.addWidget(tabs, 1)
+        self.tabs = QTabWidget()
+        v.addWidget(self.tabs, 1)
 
         # Tab: Check Update
         tab_check = QWidget()
-        tabs.addTab(tab_check, "Check Update")
+        self.tab_idx_check = self.tabs.addTab(tab_check, "Check Update")
         vcheck = QVBoxLayout(tab_check)
         self.btn_check = QPushButton("Check latest version")
         self.btn_check.clicked.connect(self.on_check_update)
@@ -173,7 +186,7 @@ class MainWindow(QMainWindow):
 
         # Tab: Download
         tab_dl = QWidget()
-        tabs.addTab(tab_dl, "Download")
+        self.tab_idx_dl = self.tabs.addTab(tab_dl, "Download")
         vdl = QVBoxLayout(tab_dl)
         grid_dl = QGridLayout()
         vdl.addLayout(grid_dl)
@@ -201,11 +214,15 @@ class MainWindow(QMainWindow):
         vdl.addWidget(self.btn_download)
         self.pb_download = QProgressBar()
         vdl.addWidget(self.pb_download)
+        self.lbl_dl_stats = QLabel("")
+        vdl.addWidget(self.lbl_dl_stats)
 
         # Tab: Decrypt
         tab_dec = QWidget()
-        tabs.addTab(tab_dec, "Decrypt")
+        self.tab_idx_dec = self.tabs.addTab(tab_dec, "Decrypt")
         vdec = QVBoxLayout(tab_dec)
+        # React to tab changes for auto-populate
+        self.tabs.currentChanged.connect(self._on_tab_changed)
         grid_dec = QGridLayout()
         vdec.addLayout(grid_dec)
 
@@ -271,6 +288,17 @@ class MainWindow(QMainWindow):
     def _latest_ok(self, ver: str):
         self.lbl_latest.setText(f"Latest: {ver}")
         self._log(f"Latest version: {ver}")
+        # Auto-fill firmware version fields in Download and Decrypt tabs
+        try:
+            self.ed_fwver.setText(ver)
+        except Exception:
+            pass
+        try:
+            self.ed_dec_fwver.setText(ver)
+        except Exception:
+            pass
+        # Remember current version context for forthcoming downloads
+        self._current_fwver = ver
 
     def _latest_timeout(self):
         self.lbl_latest.setText("Latest: request timed out (try again)")
@@ -280,16 +308,83 @@ class MainWindow(QMainWindow):
         QMessageBox.critical(self, "Error", msg)
         self._log(f"Error: {msg}")
 
+    def _human_bytes(self, n: int) -> str:
+        units = ["B","KB","MB","GB","TB"]
+        i = 0
+        f = float(n)
+        while f >= 1024 and i < len(units)-1:
+            f /= 1024.0
+            i += 1
+        return f"{f:.2f}{units[i]}"
+
+    def _format_eta(self, secs: float) -> str:
+        if secs < 0 or secs == float("inf"):
+            return "--:--:--"
+        m, s = divmod(int(secs), 60)
+        h, m = divmod(m, 60)
+        return f"{h:02d}:{m:02d}:{s:02d}"
+
+    def _update_dl_stats_label(self):
+        done = self._dl_done_bytes
+        total = self._dl_total or 0
+        now = time.time()
+        elapsed = max(0.001, now - (self._dl_start_time or now))
+        effective_done = max(0, done - (self._dl_start_base or 0))
+        speed = effective_done / elapsed
+        remaining = max(0, (total - done))
+        eta = remaining / speed if speed > 0 else float("inf")
+        if total:
+            txt = f"{self._human_bytes(done)}/{self._human_bytes(total)}  -  {self._human_bytes(speed)}/s  -  ETA {self._format_eta(eta)}"
+        else:
+            txt = f"{self._human_bytes(done)}  -  {self._human_bytes(speed)}/s"
+        self.lbl_dl_stats.setText(txt)
+
     def _dl_set_range(self, start: int, total: int):
         self.pb_download.setRange(0, total)
         self.pb_download.setValue(start)
+        # init stats
+        self._dl_total = total
+        self._dl_done_bytes = start
+        self._dl_start_time = time.time()
+        self._update_dl_stats_label()
 
     def _dl_progress(self, delta: int):
         self.pb_download.setValue(min(self.pb_download.value() + delta, self.pb_download.maximum()))
+        # update stats
+        self._dl_done_bytes = min(self._dl_done_bytes + delta, self._dl_total)
+        self._update_dl_stats_label()
 
     def _dl_done(self, path: str):
         self._log(f"Download complete: {path}")
         self.btn_download.setEnabled(True)
+        # Save last download context
+        self._last_download_path = path
+        self._last_download_fwver = self._current_fwver or self.ed_fwver.text().strip()
+        try:
+            self._last_download_outdir = os.path.dirname(path)
+        except Exception:
+            self._last_download_outdir = None
+        # Determine enc ver from filename extension
+        encver = 2 if str(path).lower().endswith('.enc2') else (4 if str(path).lower().endswith('.enc4') else None)
+        self._last_download_encver = encver
+        # If encrypted file exists (no auto-decrypt), prefill Decrypt tab fields now
+        if encver and os.path.isfile(path):
+            try:
+                self.ed_dec_fwver.setText(self._last_download_fwver or "")
+                if encver in (2, 4):
+                    self.cb_encver.setCurrentText(str(encver))
+                self.ed_infile.setText(path)
+                # Output file: same folder, stripped extension
+                if path.lower().endswith('.enc2') or path.lower().endswith('.enc4'):
+                    out_guess = path[:-5]
+                else:
+                    out_guess = path
+                self.ed_outfile.setText(out_guess)
+            except Exception:
+                pass
+        # Update stats to final state
+        self._dl_done_bytes = self._dl_total
+        self._update_dl_stats_label()
 
     def _dec_set_range(self, total: int):
         self.pb_decrypt.setRange(0, total)
@@ -402,6 +497,34 @@ class MainWindow(QMainWindow):
         if f:
             self.ed_outfile.setText(f)
 
+    def _on_tab_changed(self, index: int):
+        # Auto-populate Decrypt tab when user switches to it and last download is known
+        try:
+            if index == self.tab_idx_dec and self._last_download_path:
+                # If fields are empty or differ from last download, fill them
+                if not self.ed_dec_fwver.text().strip() and (self._last_download_fwver or self._current_fwver):
+                    self.ed_dec_fwver.setText(self._last_download_fwver or self._current_fwver)
+                # ENC ver from last known or from filename
+                encver = self._last_download_encver
+                if encver is None:
+                    p = str(self._last_download_path).lower()
+                    encver = 2 if p.endswith('.enc2') else (4 if p.endswith('.enc4') else None)
+                if encver in (2, 4):
+                    self.cb_encver.setCurrentText(str(encver))
+                # Encrypted file path
+                if not self.ed_infile.text().strip():
+                    self.ed_infile.setText(self._last_download_path)
+                # Output file in same directory, strip .enc2/.enc4
+                if not self.ed_outfile.text().strip():
+                    p = self._last_download_path
+                    if p.lower().endswith('.enc2') or p.lower().endswith('.enc4'):
+                        out_guess = p[:-5]
+                    else:
+                        out_guess = p
+                    self.ed_outfile.setText(out_guess)
+        except Exception:
+            pass
+
     # Common data
     def gather_common(self):
         model = self.ed_model.text().strip()
@@ -452,6 +575,10 @@ class MainWindow(QMainWindow):
             return
         os.makedirs(outdir, exist_ok=True)
 
+        # remember current context
+        self._current_fwver = fwver
+        self._current_outdir = outdir
+
         self.btn_download.setEnabled(False)
         resume = self.chk_resume.isChecked()
 
@@ -480,6 +607,8 @@ class MainWindow(QMainWindow):
                 initdownload(client, filename)
                 r = client.downloadfile(path + filename, dloffset)
                 self.signals.dl_set_range.emit(dloffset, size)
+                # adjust start base for resume so speed/ETA start from offset
+                self._dl_start_base = dloffset
                 with open(out_file, "ab" if dloffset else "wb") as fd:
                     for chunk in r.iter_content(chunk_size=0x10000):
                         if not chunk:
