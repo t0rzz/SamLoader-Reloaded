@@ -81,7 +81,7 @@ jobs:
 
       - name: Build GUI exe
         run: |
-          pyinstaller --noconfirm --onefile --windowed -n samloader-gui --collect-data certifi --add-data "samloader\data\regions.json;samloader\data" samloader\gui.py
+          pyinstaller --noconfirm --onefile --windowed -n samloader-gui --collect-data certifi --collect-all PySide6 --add-data "samloader\data\regions.json;samloader\data" samloader\gui.py
 
       - name: Upload artifact (backup)
         uses: actions/upload-artifact@v4

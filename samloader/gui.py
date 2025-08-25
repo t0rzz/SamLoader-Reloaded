@@ -1,15 +1,21 @@
 # SPDX-License-Identifier: GPL-3.0+
-# Simple Tkinter GUI for samloader
+# PySide6 (Qt6) GUI for SamLoader Reloaded
 # Provides basic operations: Check Update, Download, Decrypt
 
 import os
 import threading
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Dict
 
-# Support running as part of the package (python -m samloader.gui) and as a standalone script bundled by PyInstaller
+# Qt imports
+from PySide6.QtCore import Qt, QObject, Signal
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QLabel, QLineEdit, QComboBox,
+    QPushButton, QCheckBox, QTabWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
+    QFileDialog, QMessageBox, QGroupBox, QProgressBar, QTextEdit
+)
+
+# Support running as part of the package and when bundled
 try:
     from . import versionfetch
     from . import fusclient
@@ -19,8 +25,6 @@ try:
     from .regions import get_regions as get_csc_regions
     from .main import getbinaryfile, initdownload, decrypt_file
 except Exception:
-    # When executed as a script without package context (e.g., PyInstaller using samloader\gui.py),
-    # fall back to absolute imports from the bundled "samloader" package.
     import samloader.versionfetch as versionfetch
     import samloader.fusclient as fusclient
     import samloader.crypt as crypt
@@ -43,341 +47,332 @@ class ArgsLike:
     fw_ver: Optional[str] = None
 
 
-class Tooltip:
-    def __init__(self, widget, text: str, wraplength: int = 380):
-        self.widget = widget
-        self.text = text
-        self.wraplength = wraplength
-        self._tip = None
-        self.widget.bind("<Enter>", self._show)
-        self.widget.bind("<Leave>", self._hide)
-        self.widget.bind("<ButtonPress>", self._hide)
+class Signals(QObject):
+    log = Signal(str)
+    set_status = Signal(str)
+    set_check_btn = Signal(bool, str)
+    latest_ok = Signal(str)
+    latest_timeout = Signal()
+    error = Signal(str)
 
-    def _show(self, event=None):
-        if self._tip is not None:
-            return
-        # Position near the widget
-        x = self.widget.winfo_rootx() + 10
-        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
-        tip = tk.Toplevel(self.widget)
-        tip.wm_overrideredirect(True)
-        tip.wm_geometry(f"+{x}+{y}")
-        frame = ttk.Frame(tip, padding=6, relief=tk.SOLID, borderwidth=1)
-        frame.pack()
-        lbl = ttk.Label(frame, text=self.text, justify=tk.LEFT, wraplength=self.wraplength)
-        lbl.pack()
-        self._tip = tip
+    # Download
+    dl_set_range = Signal(int, int)
+    dl_progress = Signal(int)
+    dl_done = Signal(str)
 
-    def _hide(self, event=None):
-        if self._tip is not None:
-            try:
-                self._tip.destroy()
-            except Exception:
-                pass
-            self._tip = None
+    # Decrypt
+    dec_set_range = Signal(int)
+    dec_progress = Signal(int)
+    dec_done = Signal(str)
 
-class SamloaderGUI(tk.Tk):
+
+class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         try:
-            self.title(f"SamLoader Reloaded v{VERSION}")
+            self.setWindowTitle(f"SamLoader Reloaded v{VERSION}")
         except Exception:
-            self.title("SamLoader Reloaded")
-        self.geometry("720x520")
-        self.resizable(True, True)
+            self.setWindowTitle("SamLoader Reloaded")
+        self.resize(900, 600)
+
+        self.signals = Signals()
+        self.signals.log.connect(self._log)
+        self.signals.set_status.connect(self._set_status)
+        self.signals.set_check_btn.connect(self._set_check_btn)
+        self.signals.latest_ok.connect(self._latest_ok)
+        self.signals.latest_timeout.connect(self._latest_timeout)
+        self.signals.error.connect(self._show_error)
+        self.signals.dl_set_range.connect(self._dl_set_range)
+        self.signals.dl_progress.connect(self._dl_progress)
+        self.signals.dl_done.connect(self._dl_done)
+        self.signals.dec_set_range.connect(self._dec_set_range)
+        self.signals.dec_progress.connect(self._dec_progress)
+        self.signals.dec_done.connect(self._dec_done)
+
+        self._regions_map: Dict[str, str] = {}
+        self._all_region_codes = []
 
         self._build_ui()
 
-    # --- Region helpers: auto-complete and picker ---
-    def _on_region_typed(self, event=None):
-        # Uppercase enforce
-        text = self.var_region.get()
-        up = text.upper()
-        if text != up:
-            # Preserve cursor index
-            try:
-                idx = self.cmb_region.index(tk.INSERT)
-            except Exception:
-                idx = None
-            self.var_region.set(up)
-            if idx is not None:
-                try:
-                    self.cmb_region.icursor(idx)
-                except Exception:
-                    pass
-        q = up.strip()
-        # Filter values: codes starting with q or names containing q
-        if not q:
-            values = self._all_region_codes
-        else:
-            values = [c for c in self._all_region_codes if c.startswith(q)]
-            if self._regions_map:
-                # Also include codes whose names contain the query (case-insensitive)
-                name_hits = [c for c, nm in self._regions_map.items() if q.lower() in nm.lower()]
-                # Merge keeping order and uniqueness
-                for c in name_hits:
-                    if c not in values:
-                        values.append(c)
-        self.cmb_region['values'] = values
-
-    def _open_region_picker(self):
-        top = tk.Toplevel(self)
-        top.title("Select Region (CSC)")
-        top.geometry("420x360")
-        frm = ttk.Frame(top, padding=8)
-        frm.pack(fill=tk.BOTH, expand=True)
-        ttk.Label(frm, text="Search").pack(anchor=tk.W)
-        sv = tk.StringVar()
-        ent = ttk.Entry(frm, textvariable=sv)
-        ent.pack(fill=tk.X, pady=4)
-        lst = tk.Listbox(frm, activestyle='dotbox')
-        lst.pack(fill=tk.BOTH, expand=True)
-        btns = ttk.Frame(frm)
-        btns.pack(fill=tk.X, pady=6)
-        def populate(filter_text: str = ""):
-            lst.delete(0, tk.END)
-            items = []
-            codes = self._all_region_codes
-            if not codes and self._regions_map:
-                codes = sorted(self._regions_map.keys())
-            f = filter_text.strip()
-            if f:
-                fu = f.upper()
-                items = [c for c in codes if c.startswith(fu)]
-                # add name matches
-                if self._regions_map:
-                    name_hits = [c for c, nm in self._regions_map.items() if f.lower() in nm.lower()]
-                    for c in name_hits:
-                        if c not in items:
-                            items.append(c)
-            else:
-                items = codes
-            for c in items:
-                name = self._regions_map.get(c, "") if self._regions_map else ""
-                disp = f"{c} ({name})" if name else c
-                lst.insert(tk.END, disp)
-        def on_search(*_):
-            populate(sv.get())
-        def choose_and_close():
-            sel = lst.curselection()
-            if not sel:
-                top.destroy()
-                return
-            line = lst.get(sel[0])
-            code = line.split()[0]
-            self.var_region.set(code)
-            # ensure combobox values reflect current filter
-            self._on_region_typed()
-            top.destroy()
-        def on_double(_):
-            choose_and_close()
-        ttk.Button(btns, text="OK", command=choose_and_close).pack(side=tk.RIGHT, padx=4)
-        ttk.Button(btns, text="Cancel", command=top.destroy).pack(side=tk.RIGHT)
-        ent.bind("<KeyRelease>", on_search)
-        lst.bind("<Double-Button-1>", on_double)
-        populate("")
-        ent.focus_set()
-
+    # UI building
     def _build_ui(self):
-        # Common frame for device info
-        common = ttk.LabelFrame(self, text="Device")
-        common.pack(fill=tk.X, padx=10, pady=10)
+        central = QWidget()
+        self.setCentralWidget(central)
+        v = QVBoxLayout(central)
+
+        # Device group
+        dev = QGroupBox("Device")
+        v.addWidget(dev)
+        grid = QGridLayout(dev)
 
         # Model
-        ttk.Label(common, text="Model").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-        self.var_model = tk.StringVar()
-        ttk.Entry(common, textvariable=self.var_model, width=20).grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
-        lbl_info_model = ttk.Label(common, text="ⓘ", cursor="question_arrow")
-        lbl_info_model.grid(row=0, column=2, sticky=tk.W, padx=(0,5), pady=5)
-        Tooltip(lbl_info_model, (
+        grid.addWidget(QLabel("Model"), 0, 0)
+        self.ed_model = QLineEdit()
+        self.ed_model.setPlaceholderText("e.g., SM-S918B")
+        grid.addWidget(self.ed_model, 0, 1)
+        lbl_model_info = QLabel("ⓘ")
+        lbl_model_info.setToolTip(
             "Method 1: Check the Settings app\n"
             "-    Open the Settings app on your Samsung Galaxy device.\n"
             "-    Scroll down and tap 'About phone' or 'About device'.\n"
             "-    Look for the 'Model number' or 'Model name' information.\n"
             "Method 2: Check the back of your Samsung phone."
-        ))
+        )
+        grid.addWidget(lbl_model_info, 0, 2)
 
-        # Region (CSC) with auto-complete and picker
-        ttk.Label(common, text="Region").grid(row=0, column=3, sticky=tk.W, padx=5, pady=5)
-        self.var_region = tk.StringVar()
-        # Preload CSC regions mapping and list of codes
-        try:
-            self._regions_map = get_csc_regions()  # code -> name
-        except Exception:
-            self._regions_map = {}
-        self._all_region_codes = sorted(list(self._regions_map.keys())) if self._regions_map else []
-        # Auto-complete combobox (codes)
-        self.cmb_region = ttk.Combobox(common, textvariable=self.var_region, width=10, values=self._all_region_codes)
-        self.cmb_region.grid(row=0, column=4, sticky=tk.W, padx=5, pady=5)
-        # Uppercase enforcement and dynamic filtering
-        self.cmb_region.bind("<KeyRelease>", self._on_region_typed)
-        # Region info tooltip
-        lbl_info_region = ttk.Label(common, text="ⓘ", cursor="question_arrow")
-        lbl_info_region.grid(row=0, column=5, sticky=tk.W, padx=(0,5), pady=5)
-        Tooltip(lbl_info_region, (
+        # Region (CSC) with simple auto-complete via editable combobox
+        grid.addWidget(QLabel("Region"), 0, 3)
+        self.cb_region = QComboBox()
+        self.cb_region.setEditable(True)
+        self.cb_region.setInsertPolicy(QComboBox.NoInsert)
+        grid.addWidget(self.cb_region, 0, 4)
+        self.cb_region.lineEdit().textEdited.connect(self._on_region_typed)
+        lbl_region_info = QLabel("ⓘ")
+        lbl_region_info.setToolTip(
             "CSC (Customer/Carrier code): a 3-letter region code like BTU (UK), ITV (Italy).\n"
             "How to find it:\n"
             "- Settings > About phone > Software information > Service provider software version (look for codes like INS/INS,OXM/INS).\n"
             "- Sometimes printed on the device box or carrier docs.\n"
             "- You can also run 'samloader --listregions' to browse known CSC codes."
-        ))
-        # Browse button opens a searchable picker with code+name
-        ttk.Button(common, text="Browse…", command=self._open_region_picker).grid(row=0, column=6, sticky=tk.W, padx=5, pady=5)
+        )
+        grid.addWidget(lbl_region_info, 0, 5)
+        btn_browse_region = QPushButton("Browse…")
+        btn_browse_region.clicked.connect(self._open_region_picker)
+        grid.addWidget(btn_browse_region, 0, 6)
 
-        # IMEI/serial
-        ttk.Label(common, text="IMEI prefix or serial").grid(row=0, column=7, sticky=tk.W, padx=5, pady=5)
-        self.var_imei = tk.StringVar()
-        ttk.Entry(common, textvariable=self.var_imei, width=22).grid(row=0, column=8, sticky=tk.W, padx=5, pady=5)
-        lbl_info_imei = ttk.Label(common, text="ⓘ", cursor="question_arrow")
-        lbl_info_imei.grid(row=0, column=9, sticky=tk.W, padx=(0,5), pady=5)
-        Tooltip(lbl_info_imei, (
+        # IMEI
+        grid.addWidget(QLabel("IMEI prefix or serial"), 0, 7)
+        self.ed_imei = QLineEdit()
+        grid.addWidget(self.ed_imei, 0, 8)
+        lbl_imei_info = QLabel("ⓘ")
+        lbl_imei_info.setToolTip(
             "How to find your IMEI/serial:\n"
             "- Dial *#06# on the phone to show IMEI.\n"
             "- Or go to Settings > About phone > Status.\n"
             "Notes:\n"
             "- You may enter a serial instead of IMEI.\n"
             "- IMEI prefix (>= 8 digits) is accepted; the tool completes it and adds the Luhn checksum automatically."
-        ))
+        )
+        grid.addWidget(lbl_imei_info, 0, 9)
 
         # Tabs
-        tabs = ttk.Notebook(self)
-        tabs.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0,10))
+        tabs = QTabWidget()
+        v.addWidget(tabs, 1)
 
-        # Check Update tab
-        self.tab_check = ttk.Frame(tabs)
-        tabs.add(self.tab_check, text="Check Update")
+        # Tab: Check Update
+        tab_check = QWidget()
+        tabs.addTab(tab_check, "Check Update")
+        vcheck = QVBoxLayout(tab_check)
+        self.btn_check = QPushButton("Check latest version")
+        self.btn_check.clicked.connect(self.on_check_update)
+        vcheck.addWidget(self.btn_check)
+        self.lbl_latest = QLabel("Latest: -")
+        vcheck.addWidget(self.lbl_latest)
 
-        self.btn_check = ttk.Button(self.tab_check, text="Check latest version", command=self.on_check_update)
-        self.btn_check.pack(anchor=tk.W, padx=10, pady=10)
-        self.lbl_latest = ttk.Label(self.tab_check, text="Latest: -")
-        self.lbl_latest.pack(anchor=tk.W, padx=10)
+        # Tab: Download
+        tab_dl = QWidget()
+        tabs.addTab(tab_dl, "Download")
+        vdl = QVBoxLayout(tab_dl)
+        grid_dl = QGridLayout()
+        vdl.addLayout(grid_dl)
 
-        # Download tab
-        self.tab_download = ttk.Frame(tabs)
-        tabs.add(self.tab_download, text="Download")
+        grid_dl.addWidget(QLabel("Firmware version"), 0, 0)
+        self.ed_fwver = QLineEdit()
+        grid_dl.addWidget(self.ed_fwver, 0, 1, 1, 4)
 
-        frm_d = ttk.Frame(self.tab_download)
-        frm_d.pack(fill=tk.X, padx=10, pady=10)
-        ttk.Label(frm_d, text="Firmware version").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-        self.var_fwver = tk.StringVar()
-        ttk.Entry(frm_d, textvariable=self.var_fwver, width=50).grid(row=0, column=1, columnspan=4, sticky=tk.W, padx=5, pady=5)
+        grid_dl.addWidget(QLabel("Output directory"), 1, 0)
+        self.ed_outdir = QLineEdit()
+        grid_dl.addWidget(self.ed_outdir, 1, 1, 1, 3)
+        btn_outdir = QPushButton("Browse…")
+        btn_outdir.clicked.connect(self.browse_outdir)
+        grid_dl.addWidget(btn_outdir, 1, 4)
 
-        ttk.Label(frm_d, text="Output directory").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
-        self.var_outdir = tk.StringVar()
-        ttk.Entry(frm_d, textvariable=self.var_outdir, width=50).grid(row=1, column=1, columnspan=3, sticky=tk.W, padx=5, pady=5)
-        ttk.Button(frm_d, text="Browse...", command=self.browse_outdir).grid(row=1, column=4, sticky=tk.W, padx=5, pady=5)
+        self.chk_resume = QCheckBox("Resume")
+        self.chk_autodec = QCheckBox("Auto-decrypt after download")
+        hopt = QHBoxLayout()
+        hopt.addWidget(self.chk_resume)
+        hopt.addWidget(self.chk_autodec)
+        vdl.addLayout(hopt)
 
-        self.var_resume = tk.BooleanVar(value=False)
-        self.var_autodec = tk.BooleanVar(value=False)
-        ttk.Checkbutton(frm_d, text="Resume", variable=self.var_resume).grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
-        ttk.Checkbutton(frm_d, text="Auto-decrypt after download", variable=self.var_autodec).grid(row=2, column=1, columnspan=3, sticky=tk.W, padx=5, pady=5)
+        self.btn_download = QPushButton("Start download")
+        self.btn_download.clicked.connect(self.on_download)
+        vdl.addWidget(self.btn_download)
+        self.pb_download = QProgressBar()
+        vdl.addWidget(self.pb_download)
 
-        self.btn_download = ttk.Button(self.tab_download, text="Start download", command=self.on_download)
-        self.btn_download.pack(anchor=tk.W, padx=10, pady=(0,5))
+        # Tab: Decrypt
+        tab_dec = QWidget()
+        tabs.addTab(tab_dec, "Decrypt")
+        vdec = QVBoxLayout(tab_dec)
+        grid_dec = QGridLayout()
+        vdec.addLayout(grid_dec)
 
-        self.pb_download = ttk.Progressbar(self.tab_download, orient=tk.HORIZONTAL, mode='determinate')
-        self.pb_download.pack(fill=tk.X, padx=10, pady=(0,10))
+        grid_dec.addWidget(QLabel("Firmware version"), 0, 0)
+        self.ed_dec_fwver = QLineEdit()
+        grid_dec.addWidget(self.ed_dec_fwver, 0, 1)
+        grid_dec.addWidget(QLabel("Enc ver"), 0, 2)
+        self.cb_encver = QComboBox()
+        self.cb_encver.addItems(["2", "4"])
+        self.cb_encver.setCurrentText("4")
+        grid_dec.addWidget(self.cb_encver, 0, 3)
 
-        # Decrypt tab
-        self.tab_decrypt = ttk.Frame(tabs)
-        tabs.add(self.tab_decrypt, text="Decrypt")
-        frm_dec = ttk.Frame(self.tab_decrypt)
-        frm_dec.pack(fill=tk.X, padx=10, pady=10)
+        grid_dec.addWidget(QLabel("Encrypted file"), 1, 0)
+        self.ed_infile = QLineEdit()
+        grid_dec.addWidget(self.ed_infile, 1, 1, 1, 3)
+        btn_in = QPushButton("Browse…")
+        btn_in.clicked.connect(self.browse_infile)
+        grid_dec.addWidget(btn_in, 1, 4)
 
-        ttk.Label(frm_dec, text="Firmware version").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-        self.var_dec_fwver = tk.StringVar()
-        ttk.Entry(frm_dec, textvariable=self.var_dec_fwver, width=36).grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
+        grid_dec.addWidget(QLabel("Output file"), 2, 0)
+        self.ed_outfile = QLineEdit()
+        grid_dec.addWidget(self.ed_outfile, 2, 1, 1, 3)
+        btn_out = QPushButton("Browse…")
+        btn_out.clicked.connect(self.browse_outfile)
+        grid_dec.addWidget(btn_out, 2, 4)
 
-        ttk.Label(frm_dec, text="Enc ver").grid(row=0, column=2, sticky=tk.W, padx=5, pady=5)
-        self.var_encver = tk.IntVar(value=4)
-        ttk.Combobox(frm_dec, textvariable=self.var_encver, values=[2,4], width=5, state="readonly").grid(row=0, column=3, sticky=tk.W, padx=5, pady=5)
+        self.btn_decrypt = QPushButton("Start decryption")
+        self.btn_decrypt.clicked.connect(self.on_decrypt)
+        vdec.addWidget(self.btn_decrypt)
+        self.pb_decrypt = QProgressBar()
+        vdec.addWidget(self.pb_decrypt)
 
-        ttk.Label(frm_dec, text="Encrypted file").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
-        self.var_infile = tk.StringVar()
-        ttk.Entry(frm_dec, textvariable=self.var_infile, width=50).grid(row=1, column=1, columnspan=3, sticky=tk.W, padx=5, pady=5)
-        ttk.Button(frm_dec, text="Browse...", command=self.browse_infile).grid(row=1, column=4, sticky=tk.W, padx=5, pady=5)
+        # Log area
+        log_group = QGroupBox("Log")
+        v.addWidget(log_group, 1)
+        vlog = QVBoxLayout(log_group)
+        self.txt_log = QTextEdit()
+        self.txt_log.setReadOnly(True)
+        vlog.addWidget(self.txt_log)
 
-        ttk.Label(frm_dec, text="Output file").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
-        self.var_outfile = tk.StringVar()
-        ttk.Entry(frm_dec, textvariable=self.var_outfile, width=50).grid(row=2, column=1, columnspan=3, sticky=tk.W, padx=5, pady=5)
-        ttk.Button(frm_dec, text="Browse...", command=self.browse_outfile).grid(row=2, column=4, sticky=tk.W, padx=5, pady=5)
+        # Load regions
+        try:
+            self._regions_map = get_csc_regions()
+        except Exception:
+            self._regions_map = {}
+        self._all_region_codes = sorted(list(self._regions_map.keys())) if self._regions_map else []
+        self.cb_region.addItems(self._all_region_codes)
 
-        self.btn_decrypt = ttk.Button(self.tab_decrypt, text="Start decryption", command=self.on_decrypt)
-        self.btn_decrypt.pack(anchor=tk.W, padx=10, pady=(0,5))
+    # Helpers
+    def _log(self, msg: str):
+        self.txt_log.append(msg)
 
-        self.pb_decrypt = ttk.Progressbar(self.tab_decrypt, orient=tk.HORIZONTAL, mode='determinate')
-        self.pb_decrypt.pack(fill=tk.X, padx=10, pady=(0,10))
+    def _set_status(self, text: str):
+        self.lbl_latest.setText(text)
 
-        # Log box
-        logframe = ttk.LabelFrame(self, text="Log")
-        logframe.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0,10))
-        self.txt_log = tk.Text(logframe, height=8, state=tk.DISABLED)
-        self.txt_log.pack(fill=tk.BOTH, expand=True)
+    def _set_check_btn(self, enabled: bool, text: str):
+        self.btn_check.setEnabled(enabled)
+        self.btn_check.setText(text)
 
-    # Utility methods
-    def log(self, *args):
-        msg = " ".join(str(a) for a in args)
-        # Temporarily enable the widget to insert, then disable to keep it read-only
-        self.txt_log.configure(state=tk.NORMAL)
-        self.txt_log.insert(tk.END, msg + "\n")
-        self.txt_log.configure(state=tk.DISABLED)
-        self.txt_log.see(tk.END)
-        self.update_idletasks()
+    def _latest_ok(self, ver: str):
+        self.lbl_latest.setText(f"Latest: {ver}")
+        self._log(f"Latest version: {ver}")
 
+    def _latest_timeout(self):
+        self.lbl_latest.setText("Latest: request timed out (try again)")
+        self._log("Timeout while fetching latest version")
+
+    def _show_error(self, msg: str):
+        QMessageBox.critical(self, "Error", msg)
+        self._log(f"Error: {msg}")
+
+    def _dl_set_range(self, start: int, total: int):
+        self.pb_download.setRange(0, total)
+        self.pb_download.setValue(start)
+
+    def _dl_progress(self, delta: int):
+        self.pb_download.setValue(min(self.pb_download.value() + delta, self.pb_download.maximum()))
+
+    def _dl_done(self, path: str):
+        self._log(f"Download complete: {path}")
+        self.btn_download.setEnabled(True)
+
+    def _dec_set_range(self, total: int):
+        self.pb_decrypt.setRange(0, total)
+        self.pb_decrypt.setValue(0)
+
+    def _dec_progress(self, delta: int):
+        self.pb_decrypt.setValue(min(self.pb_decrypt.value() + delta, self.pb_decrypt.maximum()))
+
+    def _dec_done(self, path: str):
+        self._log(f"Decryption complete: {path}")
+        self.btn_decrypt.setEnabled(True)
+
+    # Region helpers
+    def _on_region_typed(self, text: str):
+        up = text.upper()
+        if text != up:
+            self.cb_region.lineEdit().blockSignals(True)
+            self.cb_region.lineEdit().setText(up)
+            self.cb_region.lineEdit().blockSignals(False)
+        q = up.strip()
+        self.cb_region.clear()
+        if not q:
+            self.cb_region.addItems(self._all_region_codes)
+            return
+        values = [c for c in self._all_region_codes if c.startswith(q)]
+        if self._regions_map:
+            name_hits = [c for c, nm in self._regions_map.items() if q.lower() in nm.lower()]
+            for c in name_hits:
+                if c not in values:
+                    values.append(c)
+        self.cb_region.addItems(values)
+        self.cb_region.lineEdit().setText(up)
+
+    def _open_region_picker(self):
+        # Minimal dialog: reuse the combobox list and instruct the user
+        QMessageBox.information(self, "Select Region",
+                                "Type the region code in the Region field. Suggestions appear automatically.\n"
+                                "You can also paste or type the code directly.")
+
+    # Browsers
     def browse_outdir(self):
-        d = filedialog.askdirectory()
+        d = QFileDialog.getExistingDirectory(self, "Select output directory")
         if d:
-            self.var_outdir.set(d)
+            self.ed_outdir.setText(d)
 
     def browse_infile(self):
-        f = filedialog.askopenfilename()
+        f, _ = QFileDialog.getOpenFileName(self, "Select encrypted file")
         if f:
-            self.var_infile.set(f)
+            self.ed_infile.setText(f)
 
     def browse_outfile(self):
-        f = filedialog.asksaveasfilename(defaultextension=".zip")
+        f, _ = QFileDialog.getSaveFileName(self, "Select output file", filter="ZIP files (*.zip);;All files (*.*)")
         if f:
-            self.var_outfile.set(f)
+            self.ed_outfile.setText(f)
 
-    # Actions
+    # Common data
     def gather_common(self):
-        model = self.var_model.get().strip()
-        region = self.var_region.get().strip()
-        imei_str = self.var_imei.get().strip() or None
+        model = self.ed_model.text().strip()
+        region = self.cb_region.currentText().strip()
+        imei_str = self.ed_imei.text().strip() or None
         if not model or not region:
-            messagebox.showerror("Missing data", "Model and Region are required")
+            QMessageBox.critical(self, "Missing data", "Model and Region are required")
             return None
         return model, region, imei_str
 
+    # Actions
     def on_check_update(self):
         common = self.gather_common()
         if not common:
             return
         model, region, _ = common
-        # Disable button and show progress label while checking
-        self.btn_check.config(state=tk.DISABLED, text="Checking")
+        self.signals.set_check_btn.emit(False, "Checking")
+
         def worker():
             try:
                 latest = versionfetch.getlatestver(model, region)
-                self.after(0, lambda: self.lbl_latest.config(text=f"Latest: {latest}"))
-                self.after(0, lambda: self.log("Latest version:", latest))
+                self.signals.latest_ok.emit(latest)
             except Exception as e:
-                # Suppress messagebox for timeouts; just log and update UI politely
                 try:
                     import requests
-                    is_timeout = isinstance(e, requests.exceptions.Timeout)
+                    if isinstance(e, requests.exceptions.Timeout):
+                        self.signals.latest_timeout.emit()
+                        return
                 except Exception:
-                    is_timeout = False
-                if is_timeout:
-                    self.after(0, lambda: self.lbl_latest.config(text="Latest: request timed out (try again)") )
-                    self.after(0, lambda: self.log("Timeout while fetching latest version for", model, region))
-                else:
-                    err_text = str(e)
-                    self.after(0, lambda msg=err_text: messagebox.showerror("Error", msg))
-                    self.after(0, lambda msg=err_text: self.log("Error:", msg))
+                    pass
+                self.signals.error.emit(str(e))
             finally:
-                # Restore button regardless of outcome
-                self.after(0, lambda: self.btn_check.config(state=tk.NORMAL, text="Check latest version"))
+                self.signals.set_check_btn.emit(True, "Check latest version")
         threading.Thread(target=worker, daemon=True).start()
 
     def on_download(self):
@@ -385,161 +380,122 @@ class SamloaderGUI(tk.Tk):
         if not common:
             return
         model, region, imei_input = common
-        fwver = self.var_fwver.get().strip()
-        outdir = self.var_outdir.get().strip()
+        fwver = self.ed_fwver.text().strip()
+        outdir = self.ed_outdir.text().strip()
         if not fwver:
-            messagebox.showerror("Missing data", "Firmware version is required")
+            QMessageBox.critical(self, "Missing data", "Firmware version is required")
             return
         if not outdir:
-            messagebox.showerror("Missing data", "Output directory is required")
+            QMessageBox.critical(self, "Missing data", "Output directory is required")
             return
         os.makedirs(outdir, exist_ok=True)
 
-        self.btn_download.config(state=tk.DISABLED)
-        self.pb_download['value'] = 0
-        self.pb_download['maximum'] = 100
+        self.btn_download.setEnabled(False)
+        resume = self.chk_resume.isChecked()
 
         def worker():
             try:
-                # Prepare args and fix IMEI if needed
                 args = ArgsLike(dev_model=model, dev_region=region, dev_imei=imei_input, command="download")
-                ret = imei.fixup_imei(args)
-                if ret:
-                    raise Exception("IMEI/serial missing or invalid. Provide IMEI prefix (>=8 digits) or serial in the IMEI field.")
-
+                if imei.fixup_imei(args):
+                    raise Exception("IMEI/serial missing or invalid. Provide IMEI prefix (>=8 digits) or serial.")
                 client = fusclient.FUSClient()
                 path, filename, size = getbinaryfile(client, fwver, args.dev_model, args.dev_imei, args.dev_region)
                 out_file = os.path.join(outdir, filename)
-
-                resume = self.var_resume.get()
                 try:
                     dloffset = os.stat(out_file).st_size if resume else 0
                 except FileNotFoundError:
                     dloffset = 0
-
-                self.after(0, lambda: self.log(("Resuming" if dloffset else "Downloading"), filename))
+                self.signals.log.emit(("Resuming" if dloffset else "Downloading") + f" {filename}")
                 if dloffset == size:
-                    self.after(0, lambda: self.log("Already downloaded!"))
+                    self.signals.log.emit("Already downloaded!")
+                    self.signals.dl_done.emit(out_file)
                     return
-
                 initdownload(client, filename)
                 r = client.downloadfile(path + filename, dloffset)
-
-                # Setup progress bar
-                self.after(0, lambda: self._set_progress(self.pb_download, dloffset, size))
-
+                self.signals.dl_set_range.emit(dloffset, size)
                 with open(out_file, "ab" if dloffset else "wb") as fd:
                     for chunk in r.iter_content(chunk_size=0x10000):
-                        if chunk:
-                            fd.write(chunk)
-                            fd.flush()
-                            # Update progress value
-                            self.after(0, lambda: self._increment_progress(self.pb_download, 0x10000, size))
-
-                self.after(0, lambda: self.log("Download complete:", out_file))
-
-                if self.var_autodec.get():
+                        if not chunk:
+                            continue
+                        fd.write(chunk)
+                        fd.flush()
+                        self.signals.dl_progress.emit(len(chunk))
+                if self.chk_autodec.isChecked():
                     dec_out = out_file.replace(".enc4", "").replace(".enc2", "")
                     if os.path.isfile(dec_out):
                         raise Exception(f"File {dec_out} already exists, refusing to auto-decrypt!")
-                    self.after(0, lambda: self.log("Decrypting:", out_file))
-                    version = 2 if filename.endswith(".enc2") else 4
+                    self.signals.log.emit(f"Decrypting: {out_file}")
                     # For decrypt, need fw_ver
                     args.fw_ver = fwver
+                    version = 2 if filename.lower().endswith(".enc2") else 4
                     decrypt_file(args, version, out_file, dec_out)
                     try:
                         os.remove(out_file)
                     except Exception:
                         pass
-                    self.after(0, lambda: self.log("Decryption complete:", dec_out))
-
+                    self.signals.log.emit(f"Decryption complete: {dec_out}")
+                self.signals.dl_done.emit(out_file)
             except Exception as e:
-                err_text = str(e)
-                self.after(0, lambda msg=err_text: messagebox.showerror("Error", msg))
-                self.after(0, lambda msg=err_text: self.log("Error:", msg))
-            finally:
-                self.after(0, lambda: self.btn_download.config(state=tk.NORMAL))
-                self.after(0, lambda: self._reset_progress(self.pb_download))
-
+                self.signals.error.emit(str(e))
+                self.btn_download.setEnabled(True)
         threading.Thread(target=worker, daemon=True).start()
-
-    def _set_progress(self, pb: ttk.Progressbar, initial: int, total: int):
-        pb['maximum'] = total
-        pb['value'] = initial
-
-    def _increment_progress(self, pb: ttk.Progressbar, delta: int, total: int):
-        # Keep within total bounds
-        new_val = min(pb['value'] + delta, total)
-        pb['value'] = new_val
-
-    def _reset_progress(self, pb: ttk.Progressbar):
-        # leave progress at end to show completion; not resetting to zero here
-        pass
 
     def on_decrypt(self):
         common = self.gather_common()
         if not common:
             return
         model, region, imei_input = common
-        fwver = self.var_dec_fwver.get().strip()
-        encver = int(self.var_encver.get())
-        infile = self.var_infile.get().strip()
-        outfile = self.var_outfile.get().strip()
+        fwver = self.ed_dec_fwver.text().strip()
+        encver = int(self.cb_encver.currentText())
+        infile = self.ed_infile.text().strip()
+        outfile = self.ed_outfile.text().strip()
         if not fwver or not infile or not outfile:
-            messagebox.showerror("Missing data", "Firmware version, input file and output file are required")
+            QMessageBox.critical(self, "Missing data", "Firmware version, input file and output file are required")
             return
         if not os.path.isfile(infile):
-            messagebox.showerror("Invalid input", "Encrypted input file does not exist")
+            QMessageBox.critical(self, "Invalid input", "Encrypted input file does not exist")
             return
-
-        self.btn_decrypt.config(state=tk.DISABLED)
-        self.pb_decrypt['value'] = 0
-        self.pb_decrypt['maximum'] = max(1, os.stat(infile).st_size)
+        self.btn_decrypt.setEnabled(False)
 
         def worker():
             try:
                 args = ArgsLike(dev_model=model, dev_region=region, dev_imei=imei_input, command="decrypt", enc_ver=encver, fw_ver=fwver)
-                ret = imei.fixup_imei(args)
-                if ret:
-                    raise Exception("IMEI/serial missing or invalid. Provide IMEI prefix (>=8 digits) or serial in the IMEI field.")
-
-                # Progress-wrapped decryption using crypt.decrypt_progress directly
+                if imei.fixup_imei(args):
+                    raise Exception("IMEI/serial missing or invalid. Provide IMEI prefix (>=8 digits) or serial.")
                 length = os.stat(infile).st_size
-                with open(infile, "rb") as inf, open(outfile, "wb") as outf:
-                    def progress_wrapper(src, dst, key, total_len):
-                        # Wrap the writer to update progress as bytes are written
-                        written = 0
-                        def write_and_progress(data: bytes):
-                            nonlocal written
-                            n = dst.write(data)
-                            written += n
-                            self.after(0, lambda: self._set_progress(self.pb_decrypt, written, total_len))
-                            return n
-                        # monkey-patch write
-                        class OutWrap:
-                            def write(self, data):
-                                return write_and_progress(data)
-                        crypt.decrypt_progress(src, OutWrap(), key, total_len)
-                    # Get key similarly to decrypt_file implementation
-                    getkey = crypt.getv2key if encver == 2 else crypt.getv4key
-                    key = getkey(args.fw_ver, args.dev_model, args.dev_region, args.dev_imei)
-                    if not key:
-                        raise Exception("Failed to obtain decryption key")
-                    progress_wrapper(inf, outf, key, length)
-                self.after(0, lambda: self.log("Decryption complete:", outfile))
-            except Exception as e:
-                err_text = str(e)
-                self.after(0, lambda msg=err_text: messagebox.showerror("Error", msg))
-                self.after(0, lambda msg=err_text: self.log("Error:", msg))
-            finally:
-                self.after(0, lambda: self.btn_decrypt.config(state=tk.NORMAL))
+                self.signals.dec_set_range.emit(length)
 
+                def progress_wrapper(src, dst, key, total_len):
+                    written = 0
+                    def write_and_progress(data: bytes):
+                        nonlocal written
+                        n = dst.write(data)
+                        written += n
+                        self.signals.dec_progress.emit(n)
+                        return n
+                    class OutWrap:
+                        def write(self, data):
+                            return write_and_progress(data)
+                    crypt.decrypt_progress(src, OutWrap(), key, total_len)
+
+                getkey = crypt.getv2key if encver == 2 else crypt.getv4key
+                key = getkey(args.fw_ver, args.dev_model, args.dev_region, args.dev_imei)
+                if not key:
+                    raise Exception("Failed to obtain decryption key")
+                with open(infile, "rb") as inf, open(outfile, "wb") as outf:
+                    progress_wrapper(inf, outf, key, length)
+                self.signals.dec_done.emit(outfile)
+            except Exception as e:
+                self.signals.error.emit(str(e))
+                self.btn_decrypt.setEnabled(True)
         threading.Thread(target=worker, daemon=True).start()
 
 
 def main():
-    app = SamloaderGUI()
-    app.mainloop()
+    app = QApplication.instance() or QApplication([])
+    win = MainWindow()
+    win.show()
+    app.exec()
 
 
 if __name__ == "__main__":

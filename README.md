@@ -17,7 +17,7 @@ $ pip3 install git+https://github.com/t0rzz/SamLoader-Reloaded.git
 CLI: Run with `samloader` or `python3 -m samloader`. See `samloader --help` and
 `samloader (command) --help` for help.
 
-GUI: Run with `samloader-gui` or `python -m samloader.gui` to open a simple graphical interface supporting Check Update, Download, and Decrypt.
+GUI: Run with `samloader-gui` or `python -m samloader.gui` to open a PySide6 (Qt6) graphical interface supporting Check Update, Download, and Decrypt.
 
 List known CSC regions: run `samloader --listregions` to print known CSC codes and names and exit. The list is comprehensive and maintained:
 - It first tries to fetch the latest list from this repository (t0rzz/SamLoader-Reloaded) and caches it locally.
@@ -115,11 +115,11 @@ You can create a single-file executable for Windows using PyInstaller:
 1. Install PyInstaller:
    - `pip install pyinstaller`
 2. Build the GUI app (one-file, windowed):
-   - `pyinstaller --noconfirm --onefile --windowed -n samloader-gui samloader\gui.py`
+   - `pyinstaller --noconfirm --onefile --windowed -n samloader-gui --collect-all PySide6 --collect-data certifi --add-data "samloader\data\regions.json;samloader\data" samloader\gui.py`
 3. The resulting `samloader-gui.exe` will be in the `dist` folder.
 
 Notes:
-- The GUI uses Tkinter (bundled with most Python installs on Windows).
+- The GUI uses PySide6 (Qt6) and is bundled into the exe by PyInstaller using `--collect-all PySide6`.
 - The GUI module supports both package and standalone execution, so building directly from `samloader\gui.py` works with PyInstaller (no import errors).
 - For downloading and decrypting, an IMEI prefix (>= 8 digits) or serial is required by Samsung servers; the GUI follows the same rules as the CLI.
 

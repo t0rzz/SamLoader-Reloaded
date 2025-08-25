@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="samloader",
-    version="0.15.6",
+    version="0.16.0",
     author="nlscc",
     author_email="dontsendmailhere@example.com",
     description="A tool to download firmware for Samsung phones.",
@@ -33,7 +33,8 @@ setuptools.setup(
     install_requires=[
         "tqdm",
         "pycryptodomex",
-        "requests"
+        "requests",
+        "PySide6"
     ],
     python_requires='>=3.6',
 )
