@@ -5,6 +5,7 @@ on:
     branches: [ "master" ]
     paths:
       - 'samloader/gui.py'
+      - 'samloader/gui_kivy.py'
       - 'samloader/__init__.py'
       - 'samloader/versionfetch.py'
       - 'samloader/fusclient.py'
@@ -81,7 +82,7 @@ jobs:
 
       - name: Build GUI exe
         run: |
-          pyinstaller --noconfirm --onefile --windowed -n samloader-gui --collect-data certifi --collect-all PySide6 --add-data "samloader\data\regions.json;samloader\data" samloader\gui.py
+          pyinstaller --noconfirm --onefile --windowed -n samloader-gui --collect-data certifi --collect-all kivy --add-data "samloader\data\regions.json;samloader\data" samloader\gui_kivy.py
 
       - name: Upload artifact (backup)
         uses: actions/upload-artifact@v4
