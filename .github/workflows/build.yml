@@ -2,8 +2,21 @@ name: Build GUI
 
 on:
   push:
-    tags:
-      - "v*"
+    branches: [ "master" ]
+    paths:
+      - 'samloader/gui.py'
+      - 'samloader/__init__.py'
+      - 'samloader/versionfetch.py'
+      - 'samloader/fusclient.py'
+      - 'samloader/crypt.py'
+      - 'samloader/imei.py'
+      - 'samloader/main.py'
+      - 'samloader/request.py'
+      - 'samloader/regions.py'
+      - 'samloader/data/**'
+      - 'setup.py'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -45,6 +58,7 @@ jobs:
           path: dist/samloader-gui.exe
 
       - name: Upload to Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.T0RZZ_TOKEN }}
