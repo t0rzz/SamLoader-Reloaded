@@ -15,7 +15,6 @@ on:
       - 'samloader/regions.py'
       - 'samloader/data/**'
       - 'setup.py'
-      - '.github/workflows/build.yml'
   workflow_dispatch:
 
 permissions:
