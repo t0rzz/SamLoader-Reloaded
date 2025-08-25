@@ -471,6 +471,12 @@ def initdownload(client, filename):
     resp = client.makereq("NF_DownloadBinaryInitForMass.do", req)
 
 def getbinaryfile(client, fw, model, imei, region):
+    # Normalize the firmware version string to the expected 4-part form
+    try:
+        from .versionfetch import normalizevercode
+        fw = normalizevercode(fw)
+    except Exception:
+        pass
     req = request.binaryinform(fw, model, region, imei, client.nonce)
     resp = client.makereq("NF_DownloadBinaryInform.do", req)
     root = ET.fromstring(resp)

@@ -461,7 +461,12 @@ class MainWindow(QMainWindow):
                 if imei.fixup_imei(args):
                     raise Exception("IMEI/serial missing or invalid. Provide IMEI prefix (>=8 digits) or serial.")
                 client = fusclient.FUSClient()
-                path, filename, size = getbinaryfile(client, fwver, args.dev_model, args.dev_imei, args.dev_region)
+                # Normalize fw version to ensure 4-part format
+                try:
+                    fwver_norm = versionfetch.normalizevercode(fwver)
+                except Exception:
+                    fwver_norm = fwver
+                path, filename, size = getbinaryfile(client, fwver_norm, args.dev_model, args.dev_imei, args.dev_region)
                 out_file = os.path.join(outdir, filename)
                 try:
                     dloffset = os.stat(out_file).st_size if resume else 0
