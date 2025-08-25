@@ -126,6 +126,8 @@ class MainWindow(QMainWindow):
         self.cb_region.setEditable(True)
         self.cb_region.setInsertPolicy(QComboBox.NoInsert)
         grid.addWidget(self.cb_region, 0, 4)
+        # ensure no item is auto-selected when editing/clearing
+        self.cb_region.setCurrentIndex(-1)
         self.cb_region.lineEdit().textEdited.connect(self._on_region_typed)
         lbl_region_info = QLabel("ⓘ")
         lbl_region_info.setToolTip(
@@ -251,6 +253,9 @@ class MainWindow(QMainWindow):
             self._regions_map = {}
         self._all_region_codes = sorted(list(self._regions_map.keys())) if self._regions_map else []
         self.cb_region.addItems(self._all_region_codes)
+        # start with no selection and empty editor
+        self.cb_region.setCurrentIndex(-1)
+        self.cb_region.lineEdit().setText("")
 
     # Helpers
     def _log(self, msg: str):
@@ -305,9 +310,15 @@ class MainWindow(QMainWindow):
             self.cb_region.lineEdit().setText(up)
             self.cb_region.lineEdit().blockSignals(False)
         q = up.strip()
+        # Rebuild the dropdown list based on query
+        self.cb_region.blockSignals(True)
         self.cb_region.clear()
         if not q:
+            # Restore full list but keep the editor empty and no selection
             self.cb_region.addItems(self._all_region_codes)
+            self.cb_region.setCurrentIndex(-1)
+            self.cb_region.lineEdit().setText("")
+            self.cb_region.blockSignals(False)
             return
         values = [c for c in self._all_region_codes if c.startswith(q)]
         if self._regions_map:
@@ -316,13 +327,64 @@ class MainWindow(QMainWindow):
                 if c not in values:
                     values.append(c)
         self.cb_region.addItems(values)
+        # Restore the edited text and keep no forced selection
+        self.cb_region.setCurrentIndex(-1)
         self.cb_region.lineEdit().setText(up)
+        self.cb_region.blockSignals(False)
 
     def _open_region_picker(self):
-        # Minimal dialog: reuse the combobox list and instruct the user
-        QMessageBox.information(self, "Select Region",
-                                "Type the region code in the Region field. Suggestions appear automatically.\n"
-                                "You can also paste or type the code directly.")
+        # Open a searchable picker dialog listing all CSC codes with names
+        from PySide6.QtWidgets import QDialog, QLineEdit, QListWidget, QListWidgetItem, QDialogButtonBox
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Select Region (CSC)")
+        layout = QVBoxLayout(dlg)
+        layout.addWidget(QLabel("Search"))
+        ed_search = QLineEdit()
+        layout.addWidget(ed_search)
+        listw = QListWidget()
+        layout.addWidget(listw, 1)
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        layout.addWidget(btns)
+
+        # populate function
+        def populate(filter_text: str = ""):
+            listw.clear()
+            codes = self._all_region_codes or sorted(self._regions_map.keys())
+            if filter_text:
+                f = filter_text.strip()
+                fu = f.upper()
+                items = [c for c in codes if c.startswith(fu)]
+                if self._regions_map:
+                    name_hits = [c for c, nm in self._regions_map.items() if f.lower() in nm.lower()]
+                    for c in name_hits:
+                        if c not in items:
+                            items.append(c)
+            else:
+                items = codes
+            for c in items:
+                name = self._regions_map.get(c, "") if self._regions_map else ""
+                disp = f"{c} ({name})" if name else c
+                QListWidgetItem(disp, listw)
+
+        populate("")
+
+        def on_text(_):
+            populate(ed_search.text())
+        ed_search.textChanged.connect(on_text)
+        def on_accept():
+            sel = listw.currentItem()
+            if sel:
+                code = sel.text().split()[0]
+                # set code into editor; keep no forced selection
+                self.cb_region.setCurrentIndex(-1)
+                self.cb_region.lineEdit().setText(code)
+            dlg.accept()
+        def on_reject():
+            dlg.reject()
+        btns.accepted.connect(on_accept)
+        btns.rejected.connect(on_reject)
+        listw.itemDoubleClicked.connect(lambda _: on_accept())
+        dlg.exec()
 
     # Browsers
     def browse_outdir(self):
