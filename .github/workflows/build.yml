@@ -15,8 +15,7 @@ on:
       - 'samloader/regions.py'
       - 'samloader/data/**'
       - 'setup.py'
-  release:
-    types: [published]
+      - '.github/workflows/build.yml'
   workflow_dispatch:
 
 permissions:
@@ -28,6 +27,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # we need tags and full history for tagging
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -48,6 +49,37 @@ jobs:
           $ver = python -c "import samloader; print(samloader.__version__)"
           echo "ver=$ver" >> $env:GITHUB_OUTPUT
 
+      - name: Compute tag name
+        id: tagvars
+        run: |
+          echo "tag=v${{ steps.getver.outputs.ver }}" >> $env:GITHUB_OUTPUT
+
+      - name: Check if tag exists (remote)
+        id: checktag
+        shell: bash
+        run: |
+          set -e
+          git fetch --tags --quiet
+          TAG="v${{ steps.getver.outputs.ver }}"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            # Check remote in case of shallow clone
+            if git ls-remote --tags origin | grep -q "refs/tags/$TAG$"; then
+              echo "exists=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "exists=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Create and push tag
+        if: steps.checktag.outputs.exists != 'true'
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git tag -a "v${{ steps.getver.outputs.ver }}" -m "Release v${{ steps.getver.outputs.ver }}"
+          git push https://x-access-token:${{ secrets.T0RZZ_TOKEN }}@github.com/${{ github.repository }}.git "refs/tags/v${{ steps.getver.outputs.ver }}"
+
       - name: Build GUI exe
         run: |
           pyinstaller --noconfirm --onefile --windowed -n samloader-gui --collect-data certifi --add-data "samloader\data\regions.json;samloader\data" samloader\gui.py
@@ -58,12 +90,12 @@ jobs:
           name: samloader-gui-${{ steps.getver.outputs.ver }}-win
           path: dist/samloader-gui.exe
 
-      - name: Upload to Release
-        if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/')
+      - name: Create/Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.T0RZZ_TOKEN }}
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ steps.tagvars.outputs.tag }}
           name: "SamLoader GUI ${{ steps.getver.outputs.ver }}"
+          generate_release_notes: true
           files: |
             dist/samloader-gui.exe
