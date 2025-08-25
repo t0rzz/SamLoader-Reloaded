@@ -16,7 +16,6 @@ on:
       - 'samloader/data/**'
       - 'setup.py'
       - '.github/workflows/build.yml'
-  workflow_dispatch:
 
 permissions:
   contents: write
