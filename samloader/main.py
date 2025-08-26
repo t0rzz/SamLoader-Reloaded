@@ -165,7 +165,7 @@ def main():
                             fd.write(b"\0")
                 # Dynamic chunk-queue downloader with 1 GiB chunks
                 import queue
-                CHUNK = 500 * 1024 * 1024  # 500 MiB
+                CHUNK = 64 * 1024 * 1024  # 64 MiB
                 chunks_q = queue.Queue()
                 # Enqueue chunks as (start, end) inclusive
                 off = 0

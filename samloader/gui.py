@@ -621,7 +621,7 @@ class MainWindow(QMainWindow):
                                 fd.seek(size - 1)
                                 fd.write(b"\0")
                     import queue
-                    CHUNK = 500 * 1024 * 1024  # 500 MiB
+                    CHUNK = 64 * 1024 * 1024  # 64 MiB
                     chunks_q = queue.Queue()
                     off = 0
                     while off < size:
