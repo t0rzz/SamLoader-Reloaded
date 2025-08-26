@@ -1,14 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_data_files
 
-# Minimal PyInstaller spec for the Kivy GUI.
-# Kivy assets are handled by built-in hooks; if you want to force-include
-# additional data, prefer CLI flags when invoking PyInstaller.
+datas = [('samloader\\data\\regions.json', 'samloader\\data')]
+datas += collect_data_files('certifi')
+
 
 a = Analysis(
     ['samloader\\gui_kivy.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=datas,
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
