@@ -11,7 +11,7 @@ from typing import Optional, Dict
 # Qt imports (PyQt6)
 from PyQt6.QtCore import Qt, QObject, pyqtSignal
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QLabel, QLineEdit, QComboBox,
+    QApplication, QMainWindow, QWidget, QLabel, QLineEdit, QComboBox, QSpinBox,
     QPushButton, QCheckBox, QTabWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QFileDialog, QMessageBox, QGroupBox, QProgressBar, QTextEdit, QListWidget,
     QListWidgetItem, QDialog, QDialogButtonBox
@@ -58,13 +58,13 @@ class Signals(QObject):
     error = pyqtSignal(str)
 
     # Download
-    dl_set_range = pyqtSignal(int, int)
-    dl_progress = pyqtSignal(int)
+    dl_set_range = pyqtSignal(object, object)  # start_bytes, total_bytes
+    dl_progress = pyqtSignal(int)  # delta bytes
     dl_done = pyqtSignal(str)
 
     # Decrypt
-    dec_set_range = pyqtSignal(int)
-    dec_progress = pyqtSignal(int)
+    dec_set_range = pyqtSignal(object)  # total_bytes
+    dec_progress = pyqtSignal(int)  # delta bytes
     dec_done = pyqtSignal(str)
 
 
@@ -103,6 +103,10 @@ class MainWindow(QMainWindow):
         self._last_download_path = None
         self._last_download_fwver = None
         self._last_download_encver = None
+
+        # Decrypt stats
+        self._dec_total = 0
+        self._dec_done = 0
 
         self._build_ui()
 
@@ -197,6 +201,12 @@ class MainWindow(QMainWindow):
         btn_outdir = QPushButton("Browse…")
         btn_outdir.clicked.connect(self.browse_outdir)
         grid_dl.addWidget(btn_outdir, 1, 4)
+        # Threads selector (1..10)
+        grid_dl.addWidget(QLabel("Threads"), 2, 0)
+        self.sp_threads = QSpinBox()
+        self.sp_threads.setRange(1, 10)
+        self.sp_threads.setValue(1)
+        grid_dl.addWidget(self.sp_threads, 2, 1)
         self.chk_resume = QCheckBox("Resume")
         self.chk_autodec = QCheckBox("Auto-decrypt after download")
         hopt = QHBoxLayout()
@@ -327,16 +337,23 @@ class MainWindow(QMainWindow):
         self.lbl_dl_stats.setText(txt)
 
     def _dl_set_range(self, start: int, total: int):
-        self.pb_download.setRange(0, total)
-        self.pb_download.setValue(start)
-        self._dl_total = total
-        self._dl_done_bytes = start
+        # Drive progress bar by percentage to avoid int overflows with very large files
+        self.pb_download.setRange(0, 1000)
+        pct = int((start / total) * 1000) if total else 0
+        pct = max(0, min(1000, pct))
+        self.pb_download.setValue(pct)
+        # Keep full-precision counters for stats
+        self._dl_total = int(total)
+        self._dl_done_bytes = int(start)
         self._dl_start_time = time.time()
         self._update_dl_stats_label()
 
     def _dl_progress(self, delta: int):
-        self.pb_download.setValue(min(self.pb_download.value() + delta, self.pb_download.maximum()))
+        # Update counters then compute percentage on a fixed 0..1000 scale
         self._dl_done_bytes = min(self._dl_done_bytes + delta, self._dl_total)
+        pct = int((self._dl_done_bytes / self._dl_total) * 1000) if self._dl_total else 0
+        pct = max(0, min(1000, pct))
+        self.pb_download.setValue(pct)
         self._update_dl_stats_label()
 
     def _dl_done(self, path: str):
@@ -361,11 +378,17 @@ class MainWindow(QMainWindow):
         self._update_dl_stats_label()
 
     def _dec_set_range(self, total: int):
-        self.pb_decrypt.setRange(0, total)
+        # Percent-based progress to avoid overflow on large files
+        self._dec_total = int(total)
+        self._dec_done = 0
+        self.pb_decrypt.setRange(0, 1000)
         self.pb_decrypt.setValue(0)
 
     def _dec_progress(self, delta: int):
-        self.pb_decrypt.setValue(min(self.pb_decrypt.value() + delta, self.pb_decrypt.maximum()))
+        self._dec_done = min(self._dec_done + delta, self._dec_total)
+        pct = int((self._dec_done / self._dec_total) * 1000) if self._dec_total else 0
+        pct = max(0, min(1000, pct))
+        self.pb_decrypt.setValue(pct)
 
     def _dec_done(self, path: str):
         self._log(f"Decryption complete: {path}")
@@ -582,44 +605,114 @@ class MainWindow(QMainWindow):
                     self.signals.log.emit("Already downloaded!")
                     self.signals.dl_done.emit(out_file)
                     return
-                self._dl_start_base = dloffset
-                self.signals.dl_set_range.emit(dloffset, size)
-                # Download with retry/resume on timeout/connection issues
-                pos = dloffset
-                attempts = 0
-                while pos < size:
+                threads = int(getattr(self, 'sp_threads', None).value()) if hasattr(self, 'sp_threads') else 1
+                if threads > 1 and not resume and dloffset == 0:
+                    # Multi-threaded segmented download
+                    self._dl_start_base = 0
+                    self.signals.dl_set_range.emit(0, size)
+                    # Initialize server-side and preallocate file
+                    initdownload(client, filename)
                     try:
-                        initdownload(client, filename)
-                        r = client.downloadfile(path + filename, pos)
-                        with open(out_file, "ab" if pos else "wb") as fd:
-                            if pos:
-                                fd.seek(0, os.SEEK_END)
-                            for chunk in r.iter_content(chunk_size=0x10000):
-                                if not chunk:
-                                    continue
-                                fd.write(chunk)
-                                fd.flush()
-                                n = len(chunk)
-                                pos += n
-                                self.signals.dl_progress.emit(n)
+                        with open(out_file, 'wb') as fd:
+                            fd.truncate(size)
+                    except Exception:
+                        with open(out_file, 'wb') as fd:
+                            if size > 0:
+                                fd.seek(size - 1)
+                                fd.write(b"\0")
+                    segsize = size // threads
+                    ranges = []
+                    for i in range(threads):
+                        st = i * segsize
+                        en = (st + segsize - 1) if i < threads - 1 else (size - 1)
+                        ranges.append((st, en))
+                    stop_event = threading.Event()
+                    errors = []
+                    def dl_worker(st, en):
+                        pos = st
                         attempts = 0
-                    except Exception as e:
-                        attempts += 1
-                        if attempts > 5:
-                            raise e
-                        # re-evaluate pos from disk to ensure resume point
+                        backoff = 1
+                        while pos <= en and not stop_event.is_set():
+                            try:
+                                r = client.downloadfile(path + filename, pos, en)
+                                with open(out_file, 'r+b') as fdw:
+                                    fdw.seek(pos)
+                                    for chunk in r.iter_content(chunk_size=0x10000):
+                                        if stop_event.is_set():
+                                            return
+                                        if not chunk:
+                                            continue
+                                        fdw.write(chunk)
+                                        pos += len(chunk)
+                                        self.signals.dl_progress.emit(len(chunk))
+                                attempts = 0
+                                backoff = 1
+                            except Exception as e:
+                                attempts += 1
+                                if attempts > 10:
+                                    errors.append(e)
+                                    stop_event.set()
+                                    return
+                                time.sleep(min(60, backoff))
+                                backoff *= 2
+                                # Ensure position from disk
+                                try:
+                                    pos = max(pos, os.stat(out_file).st_size)
+                                except Exception:
+                                    pass
+                    tlist = []
+                    for st, en in ranges:
+                        t = threading.Thread(target=dl_worker, args=(st, en), daemon=True)
+                        t.start()
+                        tlist.append(t)
+                    for t in tlist:
+                        t.join()
+                    if errors:
+                        raise Exception(f"download failed: {errors[0]}")
+                else:
+                    # Fallback single-thread (resume-aware)
+                    if threads > 1 and (resume or dloffset > 0):
+                        self.signals.log.emit("Note: resume or existing partial download disables multi-thread; falling back to single-thread.")
+                    self._dl_start_base = dloffset
+                    self.signals.dl_set_range.emit(dloffset, size)
+                    pos = dloffset
+                    attempts = 0
+                    backoff = 1
+                    while pos < size:
                         try:
-                            pos = os.stat(out_file).st_size
-                        except Exception:
-                            pass
-                        continue
+                            initdownload(client, filename)
+                            r = client.downloadfile(path + filename, pos)
+                            with open(out_file, 'ab' if pos else 'wb') as fd:
+                                if pos:
+                                    fd.seek(0, os.SEEK_END)
+                                for chunk in r.iter_content(chunk_size=0x10000):
+                                    if not chunk:
+                                        continue
+                                    fd.write(chunk)
+                                    fd.flush()
+                                    n = len(chunk)
+                                    pos += n
+                                    self.signals.dl_progress.emit(n)
+                            attempts = 0
+                            backoff = 1
+                        except Exception as e:
+                            attempts += 1
+                            if attempts > 10:
+                                raise e
+                            time.sleep(min(60, backoff))
+                            backoff *= 2
+                            try:
+                                pos = os.stat(out_file).st_size
+                            except Exception:
+                                pass
+                # Optional auto-decrypt
                 if self.chk_autodec.isChecked():
-                    dec_out = out_file.replace(".enc4", "").replace(".enc2", "")
+                    dec_out = out_file.replace('.enc4', '').replace('.enc2', '')
                     if os.path.isfile(dec_out):
                         raise Exception(f"File {dec_out} already exists, refusing to auto-decrypt!")
                     self.signals.log.emit(f"Decrypting: {out_file}")
                     args.fw_ver = fwver_norm
-                    version = 2 if filename.lower().endswith(".enc2") else 4
+                    version = 2 if filename.lower().endswith('.enc2') else 4
                     decrypt_file(args, version, out_file, dec_out)
                     try:
                         os.remove(out_file)

@@ -131,3 +131,14 @@ Notes:
 ## Note
 
 This project was originally created at `nlscc/samloader`, later moved to `samloader/samloader`, then forked to `martinetd/samloader`, and is now maintained at `t0rzz/SamLoader-Reloaded`. 
+
+
+## GUI download behavior (threads, file writing, temp)
+
+- Threads: the GUI includes a Threads selector (1..10). When Threads > 1 and you start from scratch (no resume/partial), it uses the same segmented multi‑thread logic as the CLI (preallocation, byte‑range segments, per‑segment retries with backoff, aggregated progress). If Resume is enabled or a partial file already exists, it automatically falls back to single‑thread for integrity.
+- File writing: data is written directly to the selected destination file on disk as it arrives (streaming write). There is no staging in a temporary file.
+  - If “Resume” is enabled and a partial exists, the GUI resumes from the last written byte and appends to the same file.
+  - If “Resume” is disabled, the GUI starts from zero and overwrites any existing file with the same name in the chosen directory.
+- Temp directory: the GUI does not download to a temp directory first. The only temporary files you might see are those used by PyInstaller’s one‑file runtime (extracted into a system temp folder when running the EXE), unrelated to the downloaded firmware data.
+- Progress, speed, ETA: the progress bar is initialized using the server‑reported size and updates with the exact number of bytes written. The label below the bar shows total bytes done/total size, current speed, and estimated time remaining.
+- Timeouts and retries: network operations use a 5‑second per‑request timeout with automatic retries. If a connection drops mid‑transfer, the GUI retries and resumes from the last saved byte (no data loss).
