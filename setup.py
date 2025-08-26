@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="samloader",
-    version="0.18.0",
+    version="0.18.1",
     author="t0rzz",
     author_email="dontsendmailhere@example.com",
     description="A tool to download firmware for Samsung phones.",

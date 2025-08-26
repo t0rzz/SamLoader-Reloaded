@@ -22,6 +22,11 @@ GUI: Run with `samloader-gui` or `python -m samloader.gui` to open a PyQt6 (Qt6)
 List known CSC regions: run `samloader --listregions` to print known CSC codes and names and exit. The list is comprehensive and maintained:
 - It first tries to fetch the latest list from this repository (t0rzz/SamLoader-Reloaded) and caches it locally.
 - If offline, it falls back to the cached file, then to a packaged dataset shipped with samloader.
+
+Network behavior (CLI and GUI):
+- All network operations use a maximum 5-second per-request timeout.
+- On timeouts or transient network errors, commands automatically retry a few times.
+
 Example output lines:
 - BTU (United Kingdom, no brand)
 - ITV (Italy, no brand)

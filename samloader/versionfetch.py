@@ -16,17 +16,32 @@ def normalizevercode(vercode: str) -> str:
     return "/".join(ver)
 
 def getlatestver(model: str, region: str) -> str:
-    """ Get the latest firmware version code for a model and region. """
-    req = requests.get(
-        "https://fota-cloud-dn.ospserver.net/firmware/" + region + "/" + model + "/version.xml",
-        headers={'User-Agent': 'curl/7.87.0'},
-        timeout=10,
-    )
-    if req.status_code == 403:
-        raise Exception("Model or region not found (403)")
-    req.raise_for_status()
-    root = ET.fromstring(req.text)
-    vercode = root.find("./firmware/version/latest").text
-    if vercode is None:
-        raise Exception("No latest firmware available")
-    return normalizevercode(vercode)
+    """ Get the latest firmware version code for a model and region.
+    Retries a few times with a 5-second timeout per attempt.
+    """
+    last_err = None
+    for attempt in range(5):
+        try:
+            req = requests.get(
+                "https://fota-cloud-dn.ospserver.net/firmware/" + region + "/" + model + "/version.xml",
+                headers={'User-Agent': 'curl/7.87.0'},
+                timeout=5,
+            )
+            if req.status_code == 403:
+                raise Exception("Model or region not found (403)")
+            req.raise_for_status()
+            root = ET.fromstring(req.text)
+            vercode = root.find("./firmware/version/latest").text
+            if vercode is None:
+                raise Exception("No latest firmware available")
+            return normalizevercode(vercode)
+        except Exception as e:
+            last_err = e
+            # On timeout or transient network/XML issues, retry a few times
+            if attempt < 4:
+                continue
+            break
+    # Exhausted attempts
+    if isinstance(last_err, Exception):
+        raise last_err
+    raise Exception("Failed to fetch latest version")

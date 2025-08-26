@@ -551,7 +551,18 @@ class MainWindow(QMainWindow):
                     fwver_norm = versionfetch.normalizevercode(fwver)
                 except Exception:
                     fwver_norm = fwver
-                path, filename, size = getbinaryfile(client, fwver_norm, args.dev_model, args.dev_imei, args.dev_region)
+                # Retry BinaryInform (getbinaryfile) a few times on timeouts/network errors
+                last_err = None
+                for attempt in range(5):
+                    try:
+                        path, filename, size = getbinaryfile(client, fwver_norm, args.dev_model, args.dev_imei, args.dev_region)
+                        break
+                    except Exception as e:
+                        last_err = e
+                        if attempt < 4:
+                            continue
+                        else:
+                            raise last_err
                 out_file = os.path.join(outdir, filename)
                 try:
                     dloffset = os.stat(out_file).st_size if resume else 0
@@ -562,17 +573,37 @@ class MainWindow(QMainWindow):
                     self.signals.log.emit("Already downloaded!")
                     self.signals.dl_done.emit(out_file)
                     return
-                initdownload(client, filename)
-                r = client.downloadfile(path + filename, dloffset)
                 self._dl_start_base = dloffset
                 self.signals.dl_set_range.emit(dloffset, size)
-                with open(out_file, "ab" if dloffset else "wb") as fd:
-                    for chunk in r.iter_content(chunk_size=0x10000):
-                        if not chunk:
-                            continue
-                        fd.write(chunk)
-                        fd.flush()
-                        self.signals.dl_progress.emit(len(chunk))
+                # Download with retry/resume on timeout/connection issues
+                pos = dloffset
+                attempts = 0
+                while pos < size:
+                    try:
+                        initdownload(client, filename)
+                        r = client.downloadfile(path + filename, pos)
+                        with open(out_file, "ab" if pos else "wb") as fd:
+                            if pos:
+                                fd.seek(0, os.SEEK_END)
+                            for chunk in r.iter_content(chunk_size=0x10000):
+                                if not chunk:
+                                    continue
+                                fd.write(chunk)
+                                fd.flush()
+                                n = len(chunk)
+                                pos += n
+                                self.signals.dl_progress.emit(n)
+                        attempts = 0
+                    except Exception as e:
+                        attempts += 1
+                        if attempts > 5:
+                            raise e
+                        # re-evaluate pos from disk to ensure resume point
+                        try:
+                            pos = os.stat(out_file).st_size
+                        except Exception:
+                            pass
+                        continue
                 if self.chk_autodec.isChecked():
                     dec_out = out_file.replace(".enc4", "").replace(".enc2", "")
                     if os.path.isfile(dec_out):
