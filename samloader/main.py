@@ -163,50 +163,57 @@ def main():
                         if size > 0:
                             fd.seek(size - 1)
                             fd.write(b"\0")
-                segsize = size // threads_num
-                ranges = []
-                for i in range(threads_num):
-                    start_i = i * segsize
-                    end_i = (start_i + segsize - 1) if i < threads_num - 1 else (size - 1)
-                    ranges.append((start_i, end_i))
+                # Dynamic chunk-queue downloader with 1 GiB chunks
+                import queue
+                CHUNK = 1024 * 1024 * 1024  # 1 GiB
+                chunks_q = queue.Queue()
+                # Enqueue chunks as (start, end) inclusive
+                off = 0
+                while off < size:
+                    end = min(off + CHUNK, size) - 1
+                    chunks_q.put((off, end))
+                    off = end + 1
                 pbar = tqdm(total=size, initial=0, unit="B", unit_scale=True)
                 pbar_lock = threading.Lock()
                 stop_event = threading.Event()
                 errors = []
-                def dl_worker(st, en):
-                    pos = st
-                    attempts = 0
-                    backoff = 1
-                    while pos <= en and not stop_event.is_set():
+                def dl_worker():
+                    while not stop_event.is_set():
                         try:
-                            r = client.downloadfile(path + filename, pos, en)
-                            with open(out, "r+b") as fdw:
-                                for chunk in r.iter_content(chunk_size=0x10000):
-                                    if stop_event.is_set():
-                                        return
-                                    if not chunk:
-                                        continue
+                            st, en = chunks_q.get_nowait()
+                        except Exception:
+                            return
+                        pos = st
+                        attempts = 0
+                        backoff = 1
+                        while pos <= en and not stop_event.is_set():
+                            try:
+                                r = client.downloadfile(path + filename, pos, en)
+                                with open(out, "r+b") as fdw:
                                     fdw.seek(pos)
-                                    fdw.write(chunk)
-                                    pos += len(chunk)
-                                    with pbar_lock:
-                                        pbar.update(len(chunk))
-                            attempts = 0
-                            backoff = 1
-                            # If stream ended but segment not complete, loop will retry
-                        except Exception as e:
-                            attempts += 1
-                            if attempts > args.retries:
-                                errors.append(e)
-                                stop_event.set()
-                                return
-                            sleep_s = min(60, backoff)
-                            # Avoid noisy logs from threads; just backoff and retry
-                            time.sleep(sleep_s)
-                            backoff *= 2
+                                    for chunk in r.iter_content(chunk_size=0x10000):
+                                        if stop_event.is_set():
+                                            return
+                                        if not chunk:
+                                            continue
+                                        fdw.write(chunk)
+                                        pos += len(chunk)
+                                        with pbar_lock:
+                                            pbar.update(len(chunk))
+                                attempts = 0
+                                backoff = 1
+                            except Exception as e:
+                                attempts += 1
+                                if attempts > args.retries:
+                                    errors.append(e)
+                                    stop_event.set()
+                                    return
+                                time.sleep(min(60, backoff))
+                                backoff = min(60, backoff * 2)
+                        chunks_q.task_done()
                 tlist = []
-                for st, en in ranges:
-                    t = threading.Thread(target=dl_worker, args=(st, en), daemon=True)
+                for _ in range(threads_num):
+                    t = threading.Thread(target=dl_worker, daemon=True)
                     t.start()
                     tlist.append(t)
                 for t in tlist:

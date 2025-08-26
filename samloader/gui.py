@@ -607,7 +607,7 @@ class MainWindow(QMainWindow):
                     return
                 threads = int(getattr(self, 'sp_threads', None).value()) if hasattr(self, 'sp_threads') else 1
                 if threads > 1 and not resume and dloffset == 0:
-                    # Multi-threaded segmented download
+                    # Multi-threaded download with dynamic 1 GiB chunk queue
                     self._dl_start_base = 0
                     self.signals.dl_set_range.emit(0, size)
                     # Initialize server-side and preallocate file
@@ -620,49 +620,52 @@ class MainWindow(QMainWindow):
                             if size > 0:
                                 fd.seek(size - 1)
                                 fd.write(b"\0")
-                    segsize = size // threads
-                    ranges = []
-                    for i in range(threads):
-                        st = i * segsize
-                        en = (st + segsize - 1) if i < threads - 1 else (size - 1)
-                        ranges.append((st, en))
+                    import queue
+                    CHUNK = 1024 * 1024 * 1024  # 1 GiB
+                    chunks_q = queue.Queue()
+                    off = 0
+                    while off < size:
+                        en = min(off + CHUNK, size) - 1
+                        chunks_q.put((off, en))
+                        off = en + 1
                     stop_event = threading.Event()
                     errors = []
-                    def dl_worker(st, en):
-                        pos = st
-                        attempts = 0
-                        backoff = 1
-                        while pos <= en and not stop_event.is_set():
+                    def dl_worker():
+                        while not stop_event.is_set():
                             try:
-                                r = client.downloadfile(path + filename, pos, en)
-                                with open(out_file, 'r+b') as fdw:
-                                    fdw.seek(pos)
-                                    for chunk in r.iter_content(chunk_size=0x10000):
-                                        if stop_event.is_set():
-                                            return
-                                        if not chunk:
-                                            continue
-                                        fdw.write(chunk)
-                                        pos += len(chunk)
-                                        self.signals.dl_progress.emit(len(chunk))
-                                attempts = 0
-                                backoff = 1
-                            except Exception as e:
-                                attempts += 1
-                                if attempts > 10:
-                                    errors.append(e)
-                                    stop_event.set()
-                                    return
-                                time.sleep(min(60, backoff))
-                                backoff *= 2
-                                # Ensure position from disk
+                                st, en = chunks_q.get_nowait()
+                            except Exception:
+                                return
+                            pos = st
+                            attempts = 0
+                            backoff = 1
+                            while pos <= en and not stop_event.is_set():
                                 try:
-                                    pos = max(pos, os.stat(out_file).st_size)
-                                except Exception:
-                                    pass
+                                    r = client.downloadfile(path + filename, pos, en)
+                                    with open(out_file, 'r+b') as fdw:
+                                        fdw.seek(pos)
+                                        for chunk in r.iter_content(chunk_size=0x10000):
+                                            if stop_event.is_set():
+                                                return
+                                            if not chunk:
+                                                continue
+                                            fdw.write(chunk)
+                                            pos += len(chunk)
+                                            self.signals.dl_progress.emit(len(chunk))
+                                    attempts = 0
+                                    backoff = 1
+                                except Exception as e:
+                                    attempts += 1
+                                    if attempts > 10:
+                                        errors.append(e)
+                                        stop_event.set()
+                                        return
+                                    time.sleep(min(60, backoff))
+                                    backoff = min(60, backoff * 2)
+                            chunks_q.task_done()
                     tlist = []
-                    for st, en in ranges:
-                        t = threading.Thread(target=dl_worker, args=(st, en), daemon=True)
+                    for _ in range(threads):
+                        t = threading.Thread(target=dl_worker, daemon=True)
                         t.start()
                         tlist.append(t)
                     for t in tlist:
