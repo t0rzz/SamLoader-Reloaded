@@ -564,6 +564,15 @@ class MainWindow(QMainWindow):
                         else:
                             raise last_err
                 out_file = os.path.join(outdir, filename)
+                # Guard: ensure server returned a sensible size
+                if not isinstance(size, int) or size <= 0:
+                    raise Exception(f"Server returned invalid file size for {filename} (size={size})")
+                # Log preparing info with size
+                try:
+                    size_h = self._human_bytes(size)
+                except Exception:
+                    size_h = str(size)
+                self.signals.log.emit(f"Preparing: {filename} ({size_h})")
                 try:
                     dloffset = os.stat(out_file).st_size if resume else 0
                 except FileNotFoundError:
