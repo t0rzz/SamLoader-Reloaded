@@ -1,11 +1,11 @@
 import setuptools
 
-with open("README.md", "r") as fh:
+with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
     name="samloader",
-    version="0.18.3",
+    version="0.18.4",
     author="t0rzz",
     author_email="dontsendmailhere@example.com",
     description="A tool to download firmware for Samsung phones.",
