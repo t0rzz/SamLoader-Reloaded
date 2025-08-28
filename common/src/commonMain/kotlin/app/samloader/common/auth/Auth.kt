@@ -4,7 +4,8 @@ import app.samloader.common.request.RequestBuilder
 import korlibs.crypto.MD5
 import korlibs.crypto.AES
 import korlibs.crypto.Padding
-import korlibs.encoding.Base64
+import io.ktor.util.decodeBase64Bytes
+import io.ktor.util.encodeBase64
 
 /**
  * KMP Auth helpers (nonce decrypt, signature derivation), ported from Python auth.py.
@@ -32,7 +33,7 @@ object Auth {
      * Decrypt the server NONCE (Base64) to a 32-char string.
      */
     fun decryptNonceBase64(encB64: String): String {
-        val enc = Base64.decode(encB64)
+        val enc = encB64.decodeBase64Bytes()
         val key = KEY_1.encodeToByteArray()
         val iv = key.copyOf(16)
         val dec = AES.decryptCbc(enc, key, iv, padding = Padding.PKCS7)
@@ -46,7 +47,7 @@ object Auth {
         val nkey = deriveKey(noncePlain)
         val iv = nkey.copyOf(16)
         val enc = AES.encryptCbc(noncePlain.encodeToByteArray(), nkey, iv, padding = Padding.PKCS7)
-        return Base64.encode(enc)
+        return enc.encodeBase64()
     }
 
     /**
