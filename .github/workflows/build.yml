@@ -105,6 +105,17 @@ jobs:
           tag_name: ${{ steps.tagvars.outputs.tag }}
           name: "SamLoader ${{ steps.getver.outputs.ver }}"
           generate_release_notes: true
+          body: |
+            Assets naming guide:
+            - samloader-gui.exe: Windows GUI (PyQt6) binary
+            - samloader-cli.exe: Windows CLI binary
+            - samloader-gui-linux / samloader-cli-linux: Linux GUI/CLI binaries (see Linux job uploads)
+            - samloader-gui-macos / samloader-cli-macos: macOS GUI/CLI binaries (see macOS job uploads)
+            - samloader-<version>-py3-none-any.whl: Python wheel (pip installable package)
+            - samloader-<version>.tar.gz: Python source distribution
+            - *.apk: Android (Duofrost) debug builds
+            - Duofrost-unsigned.ipa: iOS unsigned IPA for side-loading (requires signing on device)
+            - duofrost-ios-frameworks/*.zip: iOS frameworks (unsigned)
           files: |
             dist/samloader-gui.exe
             dist/samloader-cli.exe
@@ -152,14 +163,18 @@ jobs:
             dist/samloader-cli
             dist/*.whl
             dist/*.tar.gz
+      - name: Rename Linux artifacts for clarity
+        run: |
+          mv dist/samloader-gui dist/samloader-gui-linux
+          mv dist/samloader-cli dist/samloader-cli-linux
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.getver.outputs.ver }}
           append_body: true
           files: |
-            dist/samloader-gui
-            dist/samloader-cli
+            dist/samloader-gui-linux
+            dist/samloader-cli-linux
         env:
           GITHUB_TOKEN: ${{ secrets.T0RZZ_TOKEN != '' && secrets.T0RZZ_TOKEN || secrets.GITHUB_TOKEN }}
 
@@ -201,13 +216,17 @@ jobs:
             dist/samloader-cli
             dist/*.whl
             dist/*.tar.gz
+      - name: Rename macOS artifacts for clarity
+        run: |
+          mv dist/samloader-gui dist/samloader-gui-macos
+          mv dist/samloader-cli dist/samloader-cli-macos
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.getver.outputs.ver }}
           append_body: true
           files: |
-            dist/samloader-gui
-            dist/samloader-cli
+            dist/samloader-gui-macos
+            dist/samloader-cli-macos
         env:
           GITHUB_TOKEN: ${{ secrets.T0RZZ_TOKEN != '' && secrets.T0RZZ_TOKEN || secrets.GITHUB_TOKEN }}

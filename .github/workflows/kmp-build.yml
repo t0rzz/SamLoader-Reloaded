@@ -127,6 +127,33 @@ jobs:
         with:
           gradle-version: 8.7
           arguments: :iosApp:build --stacktrace --no-daemon
+      - name: Build iOS app with Xcode (unsigned IPA)
+        run: |
+          set -e
+          # Create a minimal iOS app using Xcodegen-like steps if needed
+          # If an Xcode project exists under iosApp/iosApp.xcodeproj, use it; otherwise, create a stub Compose MPP iOS app via Gradle export
+          if [ -d "iosApp/iosApp.xcodeproj" ]; then
+            xcodebuild -scheme iosApp -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
+            APP_PATH=$(find build -type d -name "*.app" -path "*Release-iphoneos*" | head -n1)
+          else
+            echo "No Xcode project found. Skipping IPA creation."
+            APP_PATH=""
+          fi
+          echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
+      - name: Package IPA (unsigned)
+        if: env.APP_PATH != ''
+        run: |
+          set -e
+          rm -rf Payload
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -r Duofrost-unsigned.ipa Payload
+      - name: Upload unsigned IPA artifact
+        if: env.APP_PATH != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-unsigned-ipa
+          path: Duofrost-unsigned.ipa
       - name: Package iOS frameworks
         run: |
           set -e
@@ -182,6 +209,16 @@ jobs:
           git config user.email "github-actions@users.noreply.github.com"
           git tag -a "v${{ steps.getver.outputs.ver }}" -m "Release v${{ steps.getver.outputs.ver }}"
           git push https://x-access-token:${{ secrets.T0RZZ_TOKEN }}@github.com/${{ github.repository }}.git "refs/tags/v${{ steps.getver.outputs.ver }}"
+      - name: Upload IPA to GitHub Release
+        if: env.APP_PATH != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tagvars.outputs.tag }}
+          append_body: true
+          files: |
+            Duofrost-unsigned.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.T0RZZ_TOKEN != '' && secrets.T0RZZ_TOKEN || secrets.GITHUB_TOKEN }}
       - name: Upload iOS frameworks to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
