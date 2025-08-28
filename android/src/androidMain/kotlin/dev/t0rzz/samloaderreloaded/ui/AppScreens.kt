@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.material.ExperimentalMaterialApi::class)
 package dev.t0rzz.samloaderreloaded.ui
 
 import android.app.Activity
