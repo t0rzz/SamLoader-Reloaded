@@ -2,17 +2,13 @@
 
 Download firmware for Samsung devices (without any extra Windows drivers).
 
-# Duofrost - Samsung Firmware Downloader
+# Duofrost — cross‑platform Samsung firmware tools
 
-This is yet another firmware downloader for Samsung devices, but it has some special features.
+Duofrost is the new Kotlin Multiplatform companion to SamLoader Reloaded. The goal is to provide a single, modern, cross‑platform app (Windows, macOS, Linux, Android, iOS) to check, download, and decrypt Samsung firmware, sharing the same UI and logic on every OS. It is inspired by previous work (Samloader/Bifrost) but is an independent implementation maintained in this repository.
 
-For one, it's cross-platform. Duofrost runs on Windows, Linux, macOS, and even Android!
-
-Duofrost is also a graphical program, with a shared UI across all supported platforms.
-
-Most of the functionality in Duofrost is based on Samloader. The Python code has been converted to Kotlin and tweaked to take advantage of some of Kotlin's features.
-
-Duofrost uses Jetpack Compose, JetBrains Compose for Desktop, and Kotlin Multiplatform to create a shared codebase for all supported platforms.
+- Cross‑platform UI: one codebase with Jetpack Compose (Android) and JetBrains Compose for Desktop (Windows/macOS/Linux). iOS targets are built from the same shared logic.
+- Same core features everywhere: Check Update, Download, Decrypt, History, and Settings.
+- Designed to reach parity with the existing Python CLI/GUI, then supersede it once stable.
 
 ## Important notice (active fork)
 
@@ -166,7 +162,7 @@ This project was originally created at `nlscc/samloader`, later moved to `samloa
 ---
 
 ## Kotlin Multiplatform Migration (in progress)
-SamLoader Reloaded is being migrated to a Kotlin Multiplatform (KMP) codebase similar to Duofrost, targeting Desktop (Windows/macOS/Linux), Android, and iOS.
+SamLoader Reloaded is being migrated to a Kotlin Multiplatform (KMP) codebase named Duofrost, targeting Desktop (Windows/macOS/Linux), Android, and iOS.
 
 Project layout (new):
 - common: shared logic (networking, FUS requests, auth, version fetch, crypt, TAC DB, regions, download manager)
