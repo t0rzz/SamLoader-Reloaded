@@ -29,8 +29,8 @@ android {
         applicationId = "dev.t0rzz.samloaderreloaded"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10009
-        versionName = "1.0.9"
+        versionCode = 10010
+        versionName = "1.0.10"
     }
 
     compileOptions {

@@ -53,7 +53,6 @@ private fun DeviceInputs(onChanged: (model: String, region: String, imei: String
     var model by remember { mutableStateOf("") }
     var region by remember { mutableStateOf("") }
     var imei by remember { mutableStateOf("") }
-    val scope = rememberCoroutineScope()
     var regions by remember { mutableStateOf<List<String>>(emptyList()) }
 
     LaunchedEffect(Unit) {
@@ -98,7 +97,7 @@ private fun TabCheckUpdate() {
                 scope.launch {
                     runCatching { VersionFetch.getLatest(model, region) }
                         .onSuccess { latest = it }
-                        .onFailure { latest = "Error: ${'$'}{it.message ?: "failed"}" }
+                        .onFailure { latest = "Error: ${it.message ?: "failed"}" }
                     busy = false
                 }
             }, enabled = !busy) {
@@ -112,6 +111,7 @@ private fun TabCheckUpdate() {
 
 @Composable
 private fun TabDownload() {
+    val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
     var model by remember { mutableStateOf("") }
     var region by remember { mutableStateOf("") }
@@ -196,7 +196,6 @@ private fun TabDownload() {
                 }
             }
             Spacer(Modifier.height(8.dp))
-            val scope = rememberCoroutineScope()
             Button(onClick = {
                 if (fw.isBlank() || model.isBlank() || region.isBlank()) return@Button
                 downloading = true
@@ -209,11 +208,11 @@ private fun TabDownload() {
                         val info = fus.binaryInform(fw, model, region, imei)
                         pendingInfo = info
                         val sizeMb = (info.size.toDouble() / (1024.0 * 1024.0))
-                        stats = "${'$'}{info.filename} — ${'$'}{String.format("%.2f", sizeMb)} MiB (server)"
+                        stats = "${info.filename} — ${String.format("%.2f", sizeMb)} MiB (server)"
                         // Ask user for destination file and start streaming
                         pickOutFile.launch(info.filename)
                     }.onFailure {
-                        stats = "Error: ${'$'}{it.message ?: "failed"}"
+                        stats = "Error: ${it.message ?: "failed"}"
                         downloading = false
                     }
                 }
@@ -242,6 +241,7 @@ private fun TabDownload() {
 
 @Composable
 private fun TabDecrypt() {
+    val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
     // Collect device inputs required for key generation (like Python GUI)
     var model by remember { mutableStateOf("") }
@@ -301,7 +301,6 @@ private fun TabDecrypt() {
                 busy = false
                 return@Button
             }
-            val scope = rememberCoroutineScope()
             scope.launch {
                 runCatching {
                     resolver.openInputStream(inUri).use { ins ->
