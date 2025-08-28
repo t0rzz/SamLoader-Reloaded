@@ -3,6 +3,7 @@ package app.samloader.common.download
 import app.samloader.common.fus.FusClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.collect
 
 /** Simple shared downloader that streams from FUS cloud and reports progress. */
 object DownloadManager {
@@ -25,9 +26,9 @@ object DownloadManager {
     ): Result = withContext(Dispatchers.Default) {
         val flowChunks = fus.downloadBinary(modelPathAndName, start, endInclusive).chunks
         var total = 0L
-        kotlinx.coroutines.flow.collect(flowChunks) { chunk ->
+        flowChunks.collect { chunk: ByteArray ->
             write(chunk)
-            total += chunk.size
+            total += chunk.size.toLong()
             onProgress(chunk.size)
         }
         Result(total)

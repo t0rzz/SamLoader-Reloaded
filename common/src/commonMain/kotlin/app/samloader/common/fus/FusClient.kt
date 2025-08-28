@@ -9,6 +9,8 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.utils.io.readAvailable
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 
 /** KMP FUS client (scaffold). */
 class FusClient {
@@ -161,9 +163,6 @@ class FusClient {
         "FUS nonce=\"$nonceEnc\", signature=\"$signature\", nc=\"\", type=\"\", realm=\"\", newauth=\"1\""
 
 }
-
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
 
 class FlowChunked(val contentLength: Long, val chunks: Flow<ByteArray>)
 
