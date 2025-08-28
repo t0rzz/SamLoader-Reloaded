@@ -51,11 +51,63 @@ jobs:
         with:
           gradle-version: 8.7
           arguments: :android:assembleDebug --stacktrace --no-daemon
-      - name: Upload APK
+      - name: Upload APK (artifact)
         uses: actions/upload-artifact@v4
         with:
           name: samloader-android-debug
           path: android/build/outputs/apk/debug/*.apk
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install samloader package
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+      - name: Get version (from Python package)
+        id: getver
+        run: |
+          echo "ver=$(python - << 'PY'
+          import samloader; print(samloader.__version__)
+          PY
+          )" >> $GITHUB_OUTPUT
+      - name: Compute tag name
+        id: tagvars
+        run: |
+          echo "tag=v${{ steps.getver.outputs.ver }}" >> $GITHUB_OUTPUT
+      - name: Check if tag exists (remote)
+        id: checktag
+        shell: bash
+        run: |
+          set -e
+          git fetch --tags --quiet
+          TAG="v${{ steps.getver.outputs.ver }}"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            if git ls-remote --tags origin | grep -q "refs/tags/$TAG$"; then
+              echo "exists=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "exists=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+      - name: Create and push tag (if missing)
+        if: steps.checktag.outputs.exists != 'true'
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git tag -a "v${{ steps.getver.outputs.ver }}" -m "Release v${{ steps.getver.outputs.ver }}"
+          git push https://x-access-token:${{ secrets.T0RZZ_TOKEN }}@github.com/${{ github.repository }}.git "refs/tags/v${{ steps.getver.outputs.ver }}"
+      - name: Upload APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tagvars.outputs.tag }}
+          append_body: true
+          overwrite: true
+          files: |
+            android/build/outputs/apk/debug/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.T0RZZ_TOKEN != '' && secrets.T0RZZ_TOKEN || secrets.GITHUB_TOKEN }}
 
   build-ios:
     runs-on: macos-latest
@@ -76,3 +128,68 @@ jobs:
         with:
           gradle-version: 8.7
           arguments: :iosApp:build --stacktrace --no-daemon
+      - name: Package iOS frameworks
+        run: |
+          set -e
+          mkdir -p ios-out
+          find iosApp/build/bin -type d -name "*Framework" -print0 | while IFS= read -r -d '' dir; do
+            base=$(basename "$dir")
+            zip -r "ios-out/${base}.zip" "$dir"
+          done
+      - name: Upload iOS frameworks (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: duofrost-ios-frameworks
+          path: ios-out/*.zip
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install samloader package
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+      - name: Get version (from Python package)
+        id: getver
+        run: |
+          echo "ver=$(python - << 'PY'
+          import samloader; print(samloader.__version__)
+          PY
+          )" >> $GITHUB_OUTPUT
+      - name: Compute tag name
+        id: tagvars
+        run: |
+          echo "tag=v${{ steps.getver.outputs.ver }}" >> $GITHUB_OUTPUT
+      - name: Check if tag exists (remote)
+        id: checktag
+        shell: bash
+        run: |
+          set -e
+          git fetch --tags --quiet
+          TAG="v${{ steps.getver.outputs.ver }}"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            if git ls-remote --tags origin | grep -q "refs/tags/$TAG$"; then
+              echo "exists=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "exists=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+      - name: Create and push tag (if missing)
+        if: steps.checktag.outputs.exists != 'true'
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git tag -a "v${{ steps.getver.outputs.ver }}" -m "Release v${{ steps.getver.outputs.ver }}"
+          git push https://x-access-token:${{ secrets.T0RZZ_TOKEN }}@github.com/${{ github.repository }}.git "refs/tags/v${{ steps.getver.outputs.ver }}"
+      - name: Upload iOS frameworks to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tagvars.outputs.tag }}
+          append_body: true
+          overwrite: true
+          files: |
+            ios-out/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.T0RZZ_TOKEN != '' && secrets.T0RZZ_TOKEN || secrets.GITHUB_TOKEN }}
