@@ -2,10 +2,10 @@ package app.samloader.common.auth
 
 import app.samloader.common.request.RequestBuilder
 import korlibs.crypto.MD5
-import korlibs.crypto.AES
-import korlibs.crypto.Padding
 import io.ktor.util.decodeBase64Bytes
 import io.ktor.util.encodeBase64
+import app.samloader.common.crypto.aesCbcDecrypt
+import app.samloader.common.crypto.aesCbcEncrypt
 
 /**
  * KMP Auth helpers (nonce decrypt, signature derivation), ported from Python auth.py.
@@ -36,7 +36,7 @@ object Auth {
         val enc = encB64.decodeBase64Bytes()
         val key = KEY_1.encodeToByteArray()
         val iv = key.copyOf(16)
-        val dec = AES.decryptCbc(enc, key, iv, padding = Padding.PKCS7)
+        val dec = aesCbcDecrypt(enc, key, iv)
         return dec.decodeToString()
     }
 
@@ -46,7 +46,7 @@ object Auth {
     fun getAuthSignature(noncePlain: String): String {
         val nkey = deriveKey(noncePlain)
         val iv = nkey.copyOf(16)
-        val enc = AES.encryptCbc(noncePlain.encodeToByteArray(), nkey, iv, padding = Padding.PKCS7)
+        val enc = aesCbcEncrypt(noncePlain.encodeToByteArray(), nkey, iv)
         return enc.encodeBase64()
     }
 

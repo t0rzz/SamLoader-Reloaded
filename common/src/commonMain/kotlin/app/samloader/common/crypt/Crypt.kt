@@ -1,6 +1,6 @@
 package app.samloader.common.crypt
 
-import korlibs.crypto.AES
+import app.samloader.common.crypto.aesEcbDecrypt
 
 object Crypt {
     fun luhnChecksum(body: String): Int {
@@ -52,7 +52,7 @@ fun decryptProgress(read: ReadChunk, write: WriteChunk, key: ByteArray, totalLen
         val enc = read() ?: break
         if (enc.isEmpty()) break
         // Decrypt ECB block
-        val dec = korlibs.crypto.AES.decryptEcb(enc, key)
+        val dec = aesEcbDecrypt(enc, key)
         val isLast = processed + enc.size >= totalLen
         if (isLast) {
             val unpadded = pkcs7Unpad(dec)
