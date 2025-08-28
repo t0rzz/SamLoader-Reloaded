@@ -1,5 +1,7 @@
 package app.samloader.common.crypt
 
+import korlibs.crypto.AES
+
 object Crypt {
     fun luhnChecksum(body: String): Int {
         var sum = 0

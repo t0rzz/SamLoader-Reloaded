@@ -2,10 +2,12 @@ package app.samloader.common.auth
 
 import app.samloader.common.request.RequestBuilder
 import korlibs.crypto.MD5
+import korlibs.crypto.AES
+import korlibs.crypto.Padding
+import korlibs.encoding.Base64
 
 /**
  * KMP Auth helpers (nonce decrypt, signature derivation), ported from Python auth.py.
- * NOTE: AES-CBC encrypt/decrypt implementation will be added next using Korlibs.
  */
 object Auth {
     // Constants from Python version
@@ -27,14 +29,13 @@ object Auth {
     }
 
     /**
-     * Decrypt the server NONCE (Base64) to a 32-char string (placeholder for now).
-     * TODO: Implement AES-CBC decrypt using Korlibs; currently returns input as-is to keep API surface.
+     * Decrypt the server NONCE (Base64) to a 32-char string.
      */
     fun decryptNonceBase64(encB64: String): String {
-        val enc = korlibs.encoding.Base64.decode(encB64)
+        val enc = Base64.decode(encB64)
         val key = KEY_1.encodeToByteArray()
         val iv = key.copyOf(16)
-        val dec = korlibs.crypto.AES.decryptCbc(enc, key, iv, padding = korlibs.crypto.Padding.PKCS7)
+        val dec = AES.decryptCbc(enc, key, iv, padding = Padding.PKCS7)
         return dec.decodeToString()
     }
 
@@ -44,8 +45,8 @@ object Auth {
     fun getAuthSignature(noncePlain: String): String {
         val nkey = deriveKey(noncePlain)
         val iv = nkey.copyOf(16)
-        val enc = korlibs.crypto.AES.encryptCbc(noncePlain.encodeToByteArray(), nkey, iv, padding = korlibs.crypto.Padding.PKCS7)
-        return korlibs.encoding.Base64.encode(enc)
+        val enc = AES.encryptCbc(noncePlain.encodeToByteArray(), nkey, iv, padding = Padding.PKCS7)
+        return Base64.encode(enc)
     }
 
     /**
@@ -53,7 +54,7 @@ object Auth {
      */
     fun v4KeyFromServer(fwVersion: String, logicVal: String): ByteArray {
         val logic = RequestBuilder.getLogicCheck(fwVersion, logicVal)
-        return MD5.digest(logic.encodeToByteArray())
+        return MD5.digest(logic.encodeToByteArray()).bytes
     }
 
     /**
@@ -61,6 +62,6 @@ object Auth {
      */
     fun v2Key(version: String, model: String, region: String): ByteArray {
         val s = "$region:$model:$version"
-        return MD5.digest(s.encodeToByteArray())
+        return MD5.digest(s.encodeToByteArray()).bytes
     }
 }

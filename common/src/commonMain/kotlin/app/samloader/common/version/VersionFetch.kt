@@ -1,5 +1,12 @@
 package app.samloader.common.version
 
+import io.ktor.client.HttpClient
+import io.ktor.client.call.body
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.logging.Logging
+import io.ktor.client.request.get
+import io.ktor.client.request.header
+
 object VersionFetch {
     fun normalize(vercode: String): String {
         val parts = vercode.split('/')
