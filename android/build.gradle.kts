@@ -28,8 +28,8 @@ android {
         applicationId = "dev.t0rzz.samloaderreloaded"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.0.1"
+        versionCode = 10000
+        versionName = "1.0.0"
     }
 
     compileOptions {
