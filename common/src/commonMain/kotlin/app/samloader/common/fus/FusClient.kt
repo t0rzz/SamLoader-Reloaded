@@ -146,15 +146,15 @@ class FusClient {
         }
         val contentLength = resp.headers["Content-Length"]?.toLongOrNull() ?: -1L
         val channel = resp.bodyAsChannel()
-        val seq = sequence {
+        val flowChunks = flow {
             val buf = ByteArray(64 * 1024)
             while (!channel.isClosedForRead) {
                 val n = channel.readAvailable(buf, 0, buf.size)
                 if (n <= 0) break
-                yield(buf.copyOf(n))
+                emit(buf.copyOf(n))
             }
         }
-        return FlowChunked(contentLength, seq)
+        return FlowChunked(contentLength, flowChunks)
     }
 
     private fun fusAuthHeader(nonceEnc: String, signature: String): String =
@@ -162,7 +162,10 @@ class FusClient {
 
 }
 
-class FlowChunked(val contentLength: Long, val chunks: Sequence<ByteArray>)
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+
+class FlowChunked(val contentLength: Long, val chunks: Flow<ByteArray>)
 
 // --- Helpers (internal) ---
 private fun HttpResponse.setCookieFromResponse(): String? {

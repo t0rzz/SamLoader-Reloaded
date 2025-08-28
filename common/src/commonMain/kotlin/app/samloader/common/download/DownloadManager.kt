@@ -23,9 +23,9 @@ object DownloadManager {
         write: (ByteArray) -> Unit,
         onProgress: (Int) -> Unit = {},
     ): Result = withContext(Dispatchers.Default) {
-        val flow = fus.downloadBinary(modelPathAndName, start, endInclusive)
+        val flowChunks = fus.downloadBinary(modelPathAndName, start, endInclusive).chunks
         var total = 0L
-        for (chunk in flow.chunks) {
+        kotlinx.coroutines.flow.collect(flowChunks) { chunk ->
             write(chunk)
             total += chunk.size
             onProgress(chunk.size)
