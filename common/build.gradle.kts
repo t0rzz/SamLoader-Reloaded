@@ -4,7 +4,7 @@ plugins {
 
 kotlin {
     jvm()
-    androidTarget()
+    // Removed androidTarget() to avoid requiring AGP in :common
     iosArm64()
     iosX64()
     iosSimulatorArm64()
@@ -17,7 +17,7 @@ kotlin {
         }
         val commonTest by getting
         val jvmMain by getting
-        val androidMain by getting
+        // Removed androidMain to avoid AGP requirement in :common
         val iosMain by creating {
             dependsOn(commonMain)
         }
