@@ -12,14 +12,25 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
-                // Networking/JSON/etc. to be filled during port
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+                implementation("io.ktor:ktor-client-core:2.3.12")
+                implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
+                implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
+                implementation("io.ktor:ktor-client-logging:2.3.12")
             }
         }
         val commonTest by getting
-        val jvmMain by getting
+        val jvmMain by getting {
+            dependencies {
+                implementation("io.ktor:ktor-client-java:2.3.12")
+            }
+        }
         // Removed androidMain to avoid AGP requirement in :common
         val iosMain by creating {
             dependsOn(commonMain)
+            dependencies {
+                implementation("io.ktor:ktor-client-darwin:2.3.12")
+            }
         }
         val iosArm64Main by getting { dependsOn(iosMain) }
         val iosX64Main by getting { dependsOn(iosMain) }

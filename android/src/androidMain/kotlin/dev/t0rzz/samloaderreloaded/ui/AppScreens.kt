@@ -17,6 +17,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import app.samloader.common.Api
 import app.samloader.common.data.Regions
+import app.samloader.common.version.VersionFetch
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterialApi::class)
@@ -83,14 +84,21 @@ private fun TabCheckUpdate() {
     var region by remember { mutableStateOf("") }
 
     Column(Modifier.fillMaxSize()) {
+        val scope = rememberCoroutineScope()
         DeviceInputs { m, r, _ -> model = m; region = r }
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Button(onClick = {
+                if (model.isBlank() || region.isBlank()) {
+                    latest = "Missing model/region"
+                    return@Button
+                }
                 busy = true
-                // TODO wire to KMP VersionFetch.getLatest
-                // Placeholder just echoes input
-                latest = if (model.isBlank() || region.isBlank()) "Missing model/region" else "<latest version here>"
-                busy = false
+                scope.launch {
+                    runCatching { VersionFetch.getLatest(model, region) }
+                        .onSuccess { latest = it }
+                        .onFailure { latest = "Error: ${'$'}{it.message ?: "failed"}" }
+                    busy = false
+                }
             }, enabled = !busy) {
                 Text(if (busy) "Checking…" else "Check latest version")
             }
