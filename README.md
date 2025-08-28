@@ -23,6 +23,11 @@ List known CSC regions: run `samloader --listregions` to print known CSC codes a
 - It first tries to fetch the latest list from this repository (t0rzz/SamLoader-Reloaded) and caches it locally.
 - If offline, it falls back to the cached file, then to a packaged dataset shipped with samloader.
 
+IMEI generation (no -i provided):
+- If you omit `-i/--dev-imei`, the tool will try to auto-generate a plausible IMEI for your model using a TAC database sourced from the SamloaderKotlin project.
+- The TAC CSV is fetched at runtime and cached to `~/.samloader/tacs.csv`. If a packaged CSV is shipped, it will be used offline.
+- You can still provide a serial (non-numeric) or an IMEI prefix (>= 8 digits) manually. Prefixes are completed with random digits and a Luhn checksum.
+
 Network behavior (CLI and GUI):
 - All network operations use a maximum 5-second per-request timeout.
 - On timeouts or transient network errors, commands automatically retry a few times.
@@ -38,6 +43,7 @@ Interactive flow: after showing the latest version, the CLI asks whether you wan
 Download the specified firmware version for a given phone and region to a
 specified file or directory: `-m <model> -r <region> -i <serial/imei number prefix> download -v <version> (-O
 <output-dir> or -o <output-file>)`
+- Note: If Samsung no longer serves the requested build, the tool automatically falls back to the latest available build for your model/region (as Samsung now often serves only the latest).
 
 For faster downloads, enable multi-threading with `-T/--threads` (e.g., `-T 8`).
 Note: when `--resume` is used or a partial file already exists, the downloader falls back to single-thread mode.
@@ -142,3 +148,26 @@ This project was originally created at `nlscc/samloader`, later moved to `samloa
 - Temp directory: the GUI does not download to a temp directory first. The only temporary files you might see are those used by PyInstaller’s one‑file runtime (extracted into a system temp folder when running the EXE), unrelated to the downloaded firmware data.
 - Progress, speed, ETA: the progress bar is initialized using the server‑reported size and updates with the exact number of bytes written. The label below the bar shows total bytes done/total size, current speed, and estimated time remaining.
 - Timeouts and retries: network operations use a 5‑second per‑request timeout with automatic retries. If a connection drops mid‑transfer, the GUI retries and resumes from the last saved byte (no data loss).
+
+
+
+---
+
+## Kotlin Multiplatform Migration (in progress)
+SamLoader Reloaded is being migrated to a Kotlin Multiplatform (KMP) codebase similar to Bifrost, targeting Desktop (Windows/macOS/Linux), Android, and iOS.
+
+Project layout (new):
+- common: shared logic (networking, FUS requests, auth, version fetch, crypt, TAC DB, regions, download manager)
+- desktop: Compose for Desktop app
+- android: Android app with Jetpack Compose
+- iosApp: iOS targets (unsigned builds)
+
+Build (CI): see .github/workflows/kmp-build.yml.
+Local build examples:
+- Desktop (JVM): ./gradlew :desktop:build
+- Android (debug APK): ./gradlew :android:assembleDebug
+- iOS (frameworks): ./gradlew :iosApp:build
+
+Notes:
+- Existing Python CLI/GUI remains temporarily as a reference and will be removed after KMP feature parity.
+- KMP artifacts are unsigned; users can sign/distribute as needed (Android/iOS).

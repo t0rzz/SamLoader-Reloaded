@@ -6,7 +6,7 @@ import os
 import threading
 import time
 from dataclasses import dataclass
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 
 # Qt imports (PyQt6)
 from PyQt6.QtCore import Qt, QObject, pyqtSignal
@@ -75,7 +75,7 @@ class MainWindow(QMainWindow):
             self.setWindowTitle(f"SamLoader Reloaded v{VERSION}")
         except Exception:
             self.setWindowTitle("SamLoader Reloaded")
-        self.resize(900, 600)
+        self.resize(1000, 650)
 
         self.signals = Signals()
         self.signals.log.connect(self._log)
@@ -107,6 +107,14 @@ class MainWindow(QMainWindow):
         # Decrypt stats
         self._dec_total = 0
         self._dec_done = 0
+
+        # Settings & History storage
+        self._settings_path = os.path.join(os.path.expanduser("~"), ".samloader", "settings.json")
+        self._history_path = os.path.join(os.path.expanduser("~"), ".samloader", "history.json")
+        self._settings = {}
+        self._history: List[dict] = []
+        self._load_settings()
+        self._load_history()
 
         self._build_ui()
 
@@ -205,10 +213,11 @@ class MainWindow(QMainWindow):
         grid_dl.addWidget(QLabel("Threads"), 2, 0)
         self.sp_threads = QSpinBox()
         self.sp_threads.setRange(1, 10)
-        self.sp_threads.setValue(1)
+        self.sp_threads.setValue(int(self._settings.get("threads", 1) or 1))
         grid_dl.addWidget(self.sp_threads, 2, 1)
         self.chk_resume = QCheckBox("Resume")
         self.chk_autodec = QCheckBox("Auto-decrypt after download")
+        self.chk_autodec.setChecked(bool(self._settings.get("auto_decrypt", False)))
         hopt = QHBoxLayout()
         hopt.addWidget(self.chk_resume)
         hopt.addWidget(self.chk_autodec)
@@ -254,6 +263,41 @@ class MainWindow(QMainWindow):
         self.pb_decrypt = QProgressBar()
         vdec.addWidget(self.pb_decrypt)
 
+        # Tab: History
+        tab_hist = QWidget()
+        self.tab_idx_hist = self.tabs.addTab(tab_hist, "History")
+        vhist = QVBoxLayout(tab_hist)
+        self.list_history = QListWidget()
+        vhist.addWidget(self.list_history, 1)
+        hhist = QHBoxLayout()
+        btn_del_sel = QPushButton("Delete Selected")
+        btn_clear_all = QPushButton("Clear All")
+        btn_del_sel.clicked.connect(self._hist_delete_selected)
+        btn_clear_all.clicked.connect(self._hist_clear_all)
+        hhist.addWidget(btn_del_sel)
+        hhist.addWidget(btn_clear_all)
+        vhist.addLayout(hhist)
+        self._refresh_history_list()
+
+        # Tab: Settings
+        tab_set = QWidget()
+        self.tab_idx_set = self.tabs.addTab(tab_set, "Settings")
+        vset = QVBoxLayout(tab_set)
+        grp = QGroupBox("Preferences")
+        vset.addWidget(grp)
+        g = QGridLayout(grp)
+        g.addWidget(QLabel("Default threads"), 0, 0)
+        self.sp_def_threads = QSpinBox()
+        self.sp_def_threads.setRange(1, 10)
+        self.sp_def_threads.setValue(int(self._settings.get("threads", 1) or 1))
+        g.addWidget(self.sp_def_threads, 0, 1)
+        self.chk_def_autodec = QCheckBox("Auto-decrypt by default")
+        self.chk_def_autodec.setChecked(bool(self._settings.get("auto_decrypt", False)))
+        g.addWidget(self.chk_def_autodec, 1, 0, 1, 2)
+        btn_save = QPushButton("Save Settings")
+        btn_save.clicked.connect(self._save_settings_clicked)
+        vset.addWidget(btn_save)
+
         # Log area
         log_group = QGroupBox("Log")
         v.addWidget(log_group, 1)
@@ -275,6 +319,86 @@ class MainWindow(QMainWindow):
     # Helpers
     def _log(self, msg: str):
         self.txt_log.append(msg)
+
+    # Settings / History persistence
+    def _load_settings(self):
+        try:
+            os.makedirs(os.path.dirname(self._settings_path), exist_ok=True)
+        except Exception:
+            pass
+        try:
+            import json
+            if os.path.isfile(self._settings_path):
+                with open(self._settings_path, "r", encoding="utf-8") as fh:
+                    self._settings = json.load(fh) or {}
+            else:
+                self._settings = {}
+        except Exception:
+            self._settings = {}
+
+    def _save_settings_clicked(self):
+        try:
+            self._settings["threads"] = int(self.sp_def_threads.value())
+            self._settings["auto_decrypt"] = bool(self.chk_def_autodec.isChecked())
+            import json
+            os.makedirs(os.path.dirname(self._settings_path), exist_ok=True)
+            with open(self._settings_path, "w", encoding="utf-8") as fh:
+                json.dump(self._settings, fh, ensure_ascii=False, indent=2)
+            # Apply to current session defaults
+            self.sp_threads.setValue(int(self._settings.get("threads", 1) or 1))
+            self.chk_autodec.setChecked(bool(self._settings.get("auto_decrypt", False)))
+            self._log("Settings saved.")
+        except Exception as e:
+            self._show_error(str(e))
+
+    def _load_history(self):
+        try:
+            import json
+            if os.path.isfile(self._history_path):
+                with open(self._history_path, "r", encoding="utf-8") as fh:
+                    self._history = json.load(fh) or []
+            else:
+                self._history = []
+        except Exception:
+            self._history = []
+
+    def _save_history(self):
+        try:
+            import json
+            os.makedirs(os.path.dirname(self._history_path), exist_ok=True)
+            with open(self._history_path, "w", encoding="utf-8") as fh:
+                json.dump(self._history, fh, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+    def _refresh_history_list(self):
+        try:
+            self.list_history.clear()
+            for item in self._history:
+                disp = f"{item.get('time','')}  {item.get('model','')} {item.get('region','')}  {item.get('version','')}\n{item.get('file','')}"
+                QListWidgetItem(disp, self.list_history)
+        except Exception:
+            pass
+
+    def _hist_delete_selected(self):
+        try:
+            row = self.list_history.currentRow()
+            if row < 0:
+                return
+            if 0 <= row < len(self._history):
+                self._history.pop(row)
+                self._save_history()
+                self._refresh_history_list()
+        except Exception:
+            pass
+
+    def _hist_clear_all(self):
+        try:
+            self._history = []
+            self._save_history()
+            self._refresh_history_list()
+        except Exception:
+            pass
 
     def _set_status(self, text: str):
         self.lbl_latest.setText(text)
@@ -376,6 +500,24 @@ class MainWindow(QMainWindow):
                 pass
         self._dl_done_bytes = self._dl_total
         self._update_dl_stats_label()
+        # Append to history
+        try:
+            import time as _t
+            item = {
+                "time": _t.strftime("%Y-%m-%d %H:%M:%S", _t.localtime()),
+                "model": self.ed_model.text().strip(),
+                "region": self.cb_region.currentText().strip(),
+                "version": self._last_download_fwver or "",
+                "file": path,
+            }
+            self._history.append(item)
+            # Keep history to a reasonable size
+            if len(self._history) > 500:
+                self._history = self._history[-500:]
+            self._save_history()
+            self._refresh_history_list()
+        except Exception:
+            pass
 
     def _dec_set_range(self, total: int):
         # Percent-based progress to avoid overflow on large files

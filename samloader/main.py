@@ -22,6 +22,13 @@ def main():
     parser.add_argument("-i", "--dev-imei", help="device imei code (guessed from model if possible)")
     parser.add_argument("--listregions", action="store_true", help="list known CSC regions and exit")
     subparsers = parser.add_subparsers(dest="command")
+    # New: generate plausible IMEI from model using TAC DB
+    genimei = subparsers.add_parser("genimei", help="generate a plausible IMEI for a model using TAC database")
+    genimei.add_argument("--model", "-m", dest="model_only", required=True, help="device model (e.g., SM-S918B)")
+    # New: show history
+    hist = subparsers.add_parser("history", help="show download history")
+    hist.add_argument("--limit", type=int, default=20, help="number of entries to show (default: 20)")
+
     dload = subparsers.add_parser("download", help="download a firmware")
     dload.add_argument("-v", "--fw-ver", help="firmware version to download", required=True)
     dload.add_argument("-R", "--resume", help="resume an unfinished download", action="store_true")
@@ -110,6 +117,35 @@ def main():
     # If no subcommand was provided, show usage and exit
     if not args.command:
         parser.print_help()
+        return 0
+
+    # Handle simple utility subcommands early
+    if args.command == "genimei":
+        try:
+            from .tacdb import generate_imei_from_model
+        except Exception:
+            print("Error: TAC database support is not available in this build.")
+            return 1
+        gen = generate_imei_from_model(args.model_only)
+        if not gen:
+            print(f"No TAC found for model {args.model_only}")
+            return 1
+        print(gen)
+        return 0
+    if args.command == "history":
+        import json
+        hist_path = os.path.join(os.path.expanduser("~"), ".samloader", "history.json")
+        try:
+            with open(hist_path, "r", encoding="utf-8") as fh:
+                data = json.load(fh) or []
+        except Exception:
+            data = []
+        if not data:
+            print("No history yet.")
+            return 0
+        lim = max(1, int(getattr(args, "limit", 20) or 20))
+        for item in data[-lim:][::-1]:
+            print(f"- {item.get('time','')}  {item.get('model','')} {item.get('region','')}  {item.get('version','')}\n  {item.get('file','')}")
         return 0
 
     # Note: IMEI/serial validation is performed later within each command
@@ -484,28 +520,44 @@ def getbinaryfile(client, fw, model, imei, region):
         fw = normalizevercode(fw)
     except Exception:
         pass
-    # First try with effective multi-CSC local code (OXM/OXA/OWO/OMC/EUX when applicable)
-    req = request.binaryinform(fw, model, region, imei, client.nonce, use_region_local_code=False)
-    resp = client.makereq("NF_DownloadBinaryInform.do", req)
-    root = ET.fromstring(resp)
-    status = int(root.find("./FUSBody/Results/Status").text)
-    if status != 200:
-        # Fallback: retry forcing the sales CSC as DEVICE_LOCAL_CODE
-        try:
-            effective = request._effective_local_code(fw, region)
-        except Exception:
-            effective = region
-        if effective != region:
-            req2 = request.binaryinform(fw, model, region, imei, client.nonce, use_region_local_code=True)
-            resp2 = client.makereq("NF_DownloadBinaryInform.do", req2)
-            root2 = ET.fromstring(resp2)
-            status2 = int(root2.find("./FUSBody/Results/Status").text)
-            if status2 == 200:
-                root = root2
+
+    def _inform_try(version: str):
+        reqx = request.binaryinform(version, model, region, imei, client.nonce, use_region_local_code=False)
+        respx = client.makereq("NF_DownloadBinaryInform.do", reqx)
+        rootx = ET.fromstring(respx)
+        statusx = int(rootx.find("./FUSBody/Results/Status").text)
+        if statusx != 200:
+            # Fallback: retry forcing the sales CSC as DEVICE_LOCAL_CODE
+            try:
+                effective = request._effective_local_code(version, region)
+            except Exception:
+                effective = region
+            if effective != region:
+                req2 = request.binaryinform(version, model, region, imei, client.nonce, use_region_local_code=True)
+                resp2 = client.makereq("NF_DownloadBinaryInform.do", req2)
+                root2 = ET.fromstring(resp2)
+                status2 = int(root2.find("./FUSBody/Results/Status").text)
+                if status2 == 200:
+                    return root2
+                else:
+                    raise Exception(f"DownloadBinaryInform returned {statusx} (local_code={effective}) and {status2} (local_code={region}), firmware could not be found?")
             else:
-                raise Exception(f"DownloadBinaryInform returned {status} (local_code={effective}) and {status2} (local_code={region}), firmware could not be found?")
-        else:
-            raise Exception(f"DownloadBinaryInform returned {status}, firmware could not be found?")
+                raise Exception(f"DownloadBinaryInform returned {statusx}, firmware could not be found?")
+        return rootx
+
+    # First attempt: requested version
+    try:
+        root = _inform_try(fw)
+    except Exception as first_err:
+        # As per Samsung policy, fall back to latest firmware if requested build isn't served
+        try:
+            from .versionfetch import getlatestver
+            latest = getlatestver(model, region)
+            root = _inform_try(latest)
+        except Exception:
+            # Re-raise original error if latest also fails
+            raise first_err
+
     filename = root.find("./FUSBody/Put/BINARY_NAME/Data").text
     if filename is None:
         raise Exception("DownloadBinaryInform failed to find a firmware bundle")
