@@ -2,6 +2,18 @@
 
 Download firmware for Samsung devices (without any extra Windows drivers).
 
+# Duofrost - Samsung Firmware Downloader
+
+This is yet another firmware downloader for Samsung devices, but it has some special features.
+
+For one, it's cross-platform. Duofrost runs on Windows, Linux, macOS, and even Android!
+
+Duofrost is also a graphical program, with a shared UI across all supported platforms.
+
+Most of the functionality in Duofrost is based on Samloader. The Python code has been converted to Kotlin and tweaked to take advantage of some of Kotlin's features.
+
+Duofrost uses Jetpack Compose, JetBrains Compose for Desktop, and Kotlin Multiplatform to create a shared codebase for all supported platforms.
+
 ## Important notice (active fork)
 
 This fork (https://github.com/t0rzz/SamLoader-Reloaded) contains substantial improvements and is actively maintained compared to the "martinetd" fork. Please use this repository and open issues/PRs here.
@@ -154,7 +166,7 @@ This project was originally created at `nlscc/samloader`, later moved to `samloa
 ---
 
 ## Kotlin Multiplatform Migration (in progress)
-SamLoader Reloaded is being migrated to a Kotlin Multiplatform (KMP) codebase similar to Bifrost, targeting Desktop (Windows/macOS/Linux), Android, and iOS.
+SamLoader Reloaded is being migrated to a Kotlin Multiplatform (KMP) codebase similar to Duofrost, targeting Desktop (Windows/macOS/Linux), Android, and iOS.
 
 Project layout (new):
 - common: shared logic (networking, FUS requests, auth, version fetch, crypt, TAC DB, regions, download manager)

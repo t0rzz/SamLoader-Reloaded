@@ -17,5 +17,5 @@ fun main() = application {
 
 @Composable
 fun App() {
-    Text("SamLoader Reloaded (KMP) — UI to be implemented.\n\nTabs: Check Update, Download, Decrypt, History, Settings")
+    Text("Duofrost (KMP) — UI to be implemented.\n\nTabs: Check Update, Download, Decrypt, History, Settings")
 }
