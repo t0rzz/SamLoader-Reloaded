@@ -14,6 +14,7 @@ kotlin {
                 implementation(compose.ui)
                 implementation(compose.foundation)
                 implementation(compose.material)
+                implementation("androidx.activity:activity-compose:1.9.2")
             }
         }
     }
