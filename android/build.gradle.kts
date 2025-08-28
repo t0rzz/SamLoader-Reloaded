@@ -11,11 +11,11 @@ kotlin {
         val androidMain by getting {
             dependencies {
                 implementation(project(":common"))
-                implementation(compose.ui)
-                implementation(compose.foundation)
-                implementation(compose.material)
-                implementation("org.jetbrains.compose.ui:ui-text:${org.jetbrains.compose.ComposeBuildConfig.composeVersion}")
-                implementation("androidx.compose.ui:ui-text:1.6.8")
+                implementation(platform("androidx.compose:compose-bom:2024.06.00"))
+                implementation("androidx.compose.ui:ui")
+                implementation("androidx.compose.foundation:foundation")
+                implementation("androidx.compose.material:material")
+                implementation("androidx.compose.ui:ui-text")
                 implementation("androidx.activity:activity-compose:1.9.2")
             }
         }
