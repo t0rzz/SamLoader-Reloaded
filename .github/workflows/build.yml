@@ -105,7 +105,6 @@ jobs:
           tag_name: ${{ steps.tagvars.outputs.tag }}
           name: "SamLoader ${{ steps.getver.outputs.ver }}"
           generate_release_notes: true
-          overwrite: true
           files: |
             dist/samloader-gui.exe
             dist/samloader-cli.exe
@@ -158,7 +157,6 @@ jobs:
         with:
           tag_name: v${{ steps.getver.outputs.ver }}
           append_body: true
-          overwrite: true
           files: |
             dist/samloader-gui
             dist/samloader-cli
@@ -208,7 +206,6 @@ jobs:
         with:
           tag_name: v${{ steps.getver.outputs.ver }}
           append_body: true
-          overwrite: true
           files: |
             dist/samloader-gui
             dist/samloader-cli

@@ -103,7 +103,6 @@ jobs:
         with:
           tag_name: ${{ steps.tagvars.outputs.tag }}
           append_body: true
-          overwrite: true
           files: |
             android/build/outputs/apk/debug/*.apk
         env:
@@ -188,7 +187,6 @@ jobs:
         with:
           tag_name: ${{ steps.tagvars.outputs.tag }}
           append_body: true
-          overwrite: true
           files: |
             ios-out/*.zip
         env:
