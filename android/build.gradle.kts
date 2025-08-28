@@ -14,6 +14,8 @@ kotlin {
                 implementation(compose.ui)
                 implementation(compose.foundation)
                 implementation(compose.material)
+                implementation(compose.uiToolingPreview)
+                implementation("org.jetbrains.compose.ui:ui-text:${org.jetbrains.compose.ComposeBuildConfig.composeVersion}")
                 implementation("androidx.activity:activity-compose:1.9.2")
             }
         }

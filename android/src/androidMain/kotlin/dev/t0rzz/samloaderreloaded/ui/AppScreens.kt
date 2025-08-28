@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.*
+import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,6 +19,7 @@ import app.samloader.common.Api
 import app.samloader.common.data.Regions
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun DuofrostApp() {
     val tabs = listOf("Check Update", "Download", "Decrypt", "History", "Settings")
@@ -64,7 +66,7 @@ private fun DeviceInputs(onChanged: (model: String, region: String, imei: String
             region = it.uppercase(); onChanged(model, region, imei)
         }, label = { Text("Region (CSC)") }, placeholder = { Text("e.g., BTU/ITV/INS") }, modifier = Modifier.fillMaxWidth())
         if (regions.isNotEmpty()) {
-            Text(text = "Known: ${'$'}{regions.take(15).joinToString(", ")}…", style = MaterialTheme.typography.caption)
+            Text(text = "Known: ${regions.take(15).joinToString(", ")}…", style = MaterialTheme.typography.caption)
         }
         Spacer(Modifier.height(8.dp))
         OutlinedTextField(value = imei, onValueChange = {
@@ -93,7 +95,7 @@ private fun TabCheckUpdate() {
                 Text(if (busy) "Checking…" else "Check latest version")
             }
             Spacer(Modifier.width(16.dp))
-            Text("Latest: ${'$'}latest")
+            Text("Latest: $latest")
         }
     }
 }
@@ -164,7 +166,7 @@ private fun TabDownload() {
                 val total = 100
                 for (i in 1..total) {
                     progress = i / total.toFloat()
-                    stats = "${'$'}i% — simulated"
+                    stats = "$i% — simulated"
                     kotlinx.coroutines.delay(30)
                 }
                 downloading = false
