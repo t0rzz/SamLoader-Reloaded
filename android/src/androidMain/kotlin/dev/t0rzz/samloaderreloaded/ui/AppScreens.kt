@@ -12,8 +12,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardOptions
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import app.samloader.common.Api
 import app.samloader.common.data.Regions
@@ -73,7 +71,7 @@ private fun DeviceInputs(onChanged: (model: String, region: String, imei: String
         Spacer(Modifier.height(8.dp))
         OutlinedTextField(value = imei, onValueChange = {
             imei = it; onChanged(model, region, imei)
-        }, label = { Text("IMEI prefix or serial") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii), modifier = Modifier.fillMaxWidth())
+        }, label = { Text("IMEI prefix or serial") }, modifier = Modifier.fillMaxWidth())
     }
 }
 
@@ -183,7 +181,7 @@ private fun TabDownload() {
                 Text("Threads")
                 Spacer(Modifier.width(8.dp))
                 OutlinedTextField(value = threads.toString(), onValueChange = { v -> threads = v.toIntOrNull()?.coerceIn(1,10) ?: 1 },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.width(80.dp))
+                    modifier = Modifier.width(80.dp))
                 Spacer(Modifier.width(16.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = resume, onCheckedChange = { resume = it })
@@ -377,7 +375,7 @@ private fun TabSettings() {
             Text("Default threads")
             Spacer(Modifier.width(8.dp))
             OutlinedTextField(value = defThreads.toString(), onValueChange = { v -> defThreads = v.toIntOrNull()?.coerceIn(1,10) ?: 1 },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.width(80.dp))
+                modifier = Modifier.width(80.dp))
         }
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
