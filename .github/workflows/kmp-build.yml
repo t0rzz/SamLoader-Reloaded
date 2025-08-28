@@ -1,0 +1,78 @@
+name: KMP CI
+
+on:
+  push:
+    branches: [ "master" ]
+    paths:
+      - 'common/**'
+      - 'desktop/**'
+      - 'android/**'
+      - 'iosApp/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - '.github/workflows/kmp-build.yml'
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build-desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+      - name: Build Desktop (jvm)
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 8.7
+          arguments: :desktop:build --stacktrace --no-daemon
+
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+      - name: Build Android APK (debug)
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 8.7
+          arguments: :android:assembleDebug --stacktrace --no-daemon
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: samloader-android-debug
+          path: android/build/outputs/apk/debug/*.apk
+
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Xcode
+        run: |
+          xcodebuild -version
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+      - name: Build iOS frameworks (unsigned)
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 8.7
+          arguments: :iosApp:build --stacktrace --no-daemon
