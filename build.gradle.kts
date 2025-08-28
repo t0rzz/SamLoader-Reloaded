@@ -8,5 +8,5 @@ plugins {
 
 allprojects {
     group = "dev.t0rzz.samloaderreloaded"
-    version = "1.0.12"
+    version = "1.0.13"
 }
