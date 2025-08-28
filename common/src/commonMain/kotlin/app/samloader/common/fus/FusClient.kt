@@ -43,29 +43,95 @@ class FusClient {
         val nonceHeader = resp.headers["NONCE"]
         if (nonceHeader != null) {
             serverNonceEncrypted = nonceHeader
-            serverNonceDecrypted = decryptNonceStub(nonceHeader) // stub for now
-            authSignature = getAuthSignatureStub(serverNonceDecrypted) // stub for now
+            serverNonceDecrypted = app.samloader.common.auth.Auth.decryptNonceBase64(nonceHeader)
+            authSignature = app.samloader.common.auth.Auth.getAuthSignature(serverNonceDecrypted)
         }
         // Capture cookie (if present)
         resp.setCookieFromResponse()?.let { jsessionId = it }
         return serverNonceDecrypted
     }
 
-    /** Build and send BinaryInform, return parsed minimal info. */
+    /** Build and send BinaryInform, with multi-CSC and latest-fallback handling. */
     suspend fun binaryInform(version: String, model: String, region: String, imei: String, useRegionLocalCode: Boolean = false): BinaryInfo {
-        val xml = RequestBuilder.binaryInform(version, model, region, imei, serverNonceDecrypted, useRegionLocalCode)
-        val resp: String = client.post("https://neofussvr.sslcs.cdngc.net/NF_DownloadBinaryInform.do") {
-            header("Authorization", fusAuthHeader(nonceEnc = serverNonceEncrypted, signature = authSignature))
-            header("User-Agent", "Kies2.0_FUS")
-            if (jsessionId.isNotEmpty()) header("Cookie", "JSESSIONID=$jsessionId")
-            setBodyXml(xml)
-        }.body()
-        // Minimal string parsing (avoid XML dependency for now)
+        suspend fun call(versionNorm: String, forceRegionLocal: Boolean): String {
+            val xml = RequestBuilder.binaryInform(versionNorm, model, region, imei, serverNonceDecrypted, forceRegionLocal)
+            return client.post("https://neofussvr.sslcs.cdngc.net/NF_DownloadBinaryInform.do") {
+                header("Authorization", fusAuthHeader(nonceEnc = serverNonceEncrypted, signature = authSignature))
+                header("User-Agent", "Kies2.0_FUS")
+                if (jsessionId.isNotEmpty()) header("Cookie", "JSESSIONID=$jsessionId")
+                setBodyXml(xml)
+            }.body()
+        }
+        suspend fun tryInform(versionNorm: String): String {
+            val resp1 = call(versionNorm, false)
+            val status1 = Regex("<Status>(\\d+)</Status>").find(resp1)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
+            if (status1 == 200) return resp1
+            val effective = RequestBuilder.effectiveLocalCode(versionNorm, region)
+            if (effective != region) {
+                val resp2 = call(versionNorm, true)
+                val status2 = Regex("<Status>(\\d+)</Status>").find(resp2)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
+                if (status2 == 200) return resp2
+                error("BinaryInform failed: $status1 (local_code=$effective) and $status2 (local_code=$region)")
+            } else {
+                error("BinaryInform failed: $status1")
+            }
+        }
+        // Normalize version: ensure 4-part
+        val versionNorm = app.samloader.common.version.VersionFetch.normalize(version)
+        val resp = try {
+            tryInform(versionNorm)
+        } catch (first: Throwable) {
+            // Fallback: try latest available build
+            val latest = app.samloader.common.version.VersionFetch.getLatest(model, region)
+            try {
+                tryInform(latest)
+            } catch (_: Throwable) {
+                throw first
+            }
+        }
         fun match(tag: String): String? = Regex("<$tag><Data>(.*?)</Data></$tag>").find(resp)?.groupValues?.getOrNull(1)
         val fname = match("BINARY_NAME") ?: error("No firmware bundle in response")
         val size = match("BINARY_BYTE_SIZE")?.toLongOrNull() ?: error("Invalid size")
         val path = match("MODEL_PATH") ?: ""
         return BinaryInfo(path, fname, size)
+    }
+
+    /** Retrieve V4 decrypt key by calling BinaryInform and using LOGIC_VALUE_FACTORY and LATEST_FW_VERSION. */
+    suspend fun getV4Key(version: String, model: String, region: String, imei: String): ByteArray {
+        suspend fun call(versionNorm: String, forceRegionLocal: Boolean): String {
+            val xml = RequestBuilder.binaryInform(versionNorm, model, region, imei, serverNonceDecrypted, forceRegionLocal)
+            return client.post("https://neofussvr.sslcs.cdngc.net/NF_DownloadBinaryInform.do") {
+                header("Authorization", fusAuthHeader(nonceEnc = serverNonceEncrypted, signature = authSignature))
+                header("User-Agent", "Kies2.0_FUS")
+                if (jsessionId.isNotEmpty()) header("Cookie", "JSESSIONID=$jsessionId")
+                setBodyXml(xml)
+            }.body()
+        }
+        suspend fun tryInform(versionNorm: String): String {
+            val resp1 = call(versionNorm, false)
+            val status1 = Regex("<Status>(\\d+)</Status>").find(resp1)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
+            if (status1 == 200) return resp1
+            val effective = RequestBuilder.effectiveLocalCode(versionNorm, region)
+            if (effective != region) {
+                val resp2 = call(versionNorm, true)
+                val status2 = Regex("<Status>(\\d+)</Status>").find(resp2)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
+                if (status2 == 200) return resp2
+                error("BinaryInform failed: $status1 (local_code=$effective) and $status2 (local_code=$region)")
+            } else {
+                error("BinaryInform failed: $status1")
+            }
+        }
+        val versionNorm = app.samloader.common.version.VersionFetch.normalize(version)
+        val resp = try {
+            tryInform(versionNorm)
+        } catch (first: Throwable) {
+            val latest = app.samloader.common.version.VersionFetch.getLatest(model, region)
+            try { tryInform(latest) } catch (_: Throwable) { throw first }
+        }
+        fun match(tag: String): String? = Regex("<$tag><Data>(.*?)</Data></$tag>").find(resp)?.groupValues?.getOrNull(1)
+        val fwver = match("LATEST_FW_VERSION") ?: version
+        val logicVal = match("LOGIC_VALUE_FACTORY") ?: error("Missing LOGIC_VALUE_FACTORY")
+        return app.samloader.common.auth.Auth.v4KeyFromServer(fwver, logicVal)
     }
 
     /** Download from cloud; supports optional byte range. */
@@ -97,15 +163,6 @@ class FusClient {
     private fun fusAuthHeader(nonceEnc: String, signature: String): String =
         "FUS nonce=\"$nonceEnc\", signature=\"$signature\", nc=\"\", type=\"\", realm=\"\", newauth=\"1\""
 
-    private fun decryptNonceStub(enc: String): String {
-        // TODO: Implement AES-CBC decrypt per Python auth.py decryptnonce
-        return enc // placeholder: not decrypted
-    }
-
-    private fun getAuthSignatureStub(nonce: String): String {
-        // TODO: Implement AES-CBC encrypt per Python auth.py getauth
-        return authSignature // placeholder
-    }
 }
 
 class FlowChunked(val contentLength: Long, val chunks: Sequence<ByteArray>)

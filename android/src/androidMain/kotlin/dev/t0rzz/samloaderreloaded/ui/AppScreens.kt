@@ -18,6 +18,8 @@ import androidx.compose.ui.unit.dp
 import app.samloader.common.Api
 import app.samloader.common.data.Regions
 import app.samloader.common.version.VersionFetch
+import app.samloader.common.fus.FusClient
+import app.samloader.common.download.DownloadManager
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterialApi::class)
@@ -127,6 +129,44 @@ private fun TabDownload() {
     val pickDirLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
         outDir = uri?.toString() ?: outDir
     }
+    var pendingInfo by remember { mutableStateOf<FusClient.BinaryInfo?>(null) }
+    val pickOutFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri: Uri? ->
+        val info = pendingInfo
+        if (uri == null || info == null) {
+            downloading = false
+            return@rememberLauncherForActivityResult
+        }
+        // Start streaming download to the selected URI
+        val resolver = ctx.contentResolver
+        stats = "Downloading…"
+        val size = info.size.coerceAtLeast(1L)
+        scope.launch {
+            runCatching {
+                resolver.openOutputStream(uri, if (resume) "wa" else "w").use { os ->
+                    requireNotNull(os) { "Failed to open output stream" }
+                    val fus = FusClient() // regenerate nonce to be safe
+                    fus.generateNonce()
+                    var done = 0L
+                    DownloadManager.download(
+                        fus,
+                        info.path + info.filename,
+                        start = 0L,
+                        endInclusive = null,
+                        write = { chunk -> os.write(chunk) },
+                        onProgress = { delta ->
+                            done += delta
+                            progress = (done.toDouble() / size.toDouble()).toFloat().coerceIn(0f, 1f)
+                            stats = String.format("%s — %.2f%%", info.filename, progress * 100f)
+                        }
+                    )
+                }
+                stats = "Completed: ${info.filename}"
+            }.onFailure {
+                stats = "Error: ${it.message ?: "failed"}"
+            }
+            downloading = false
+        }
+    }
 
     Column(Modifier.fillMaxSize()) {
         DeviceInputs { m, r, i -> model = m; region = r; imei = i }
@@ -156,10 +196,27 @@ private fun TabDownload() {
                 }
             }
             Spacer(Modifier.height(8.dp))
+            val scope = rememberCoroutineScope()
             Button(onClick = {
-                // TODO wire to KMP downloader; placeholder simulates progress
+                if (fw.isBlank() || model.isBlank() || region.isBlank()) return@Button
                 downloading = true
                 progress = 0f
+                stats = "Preparing…"
+                scope.launch {
+                    runCatching {
+                        val fus = FusClient()
+                        fus.generateNonce()
+                        val info = fus.binaryInform(fw, model, region, imei)
+                        pendingInfo = info
+                        val sizeMb = (info.size.toDouble() / (1024.0 * 1024.0))
+                        stats = "${'$'}{info.filename} — ${'$'}{String.format("%.2f", sizeMb)} MiB (server)"
+                        // Ask user for destination file and start streaming
+                        pickOutFile.launch(info.filename)
+                    }.onFailure {
+                        stats = "Error: ${'$'}{it.message ?: "failed"}"
+                        downloading = false
+                    }
+                }
             }, enabled = !downloading && fw.isNotBlank() && model.isNotBlank() && region.isNotBlank()) {
                 Text("Start download")
             }
@@ -185,6 +242,12 @@ private fun TabDownload() {
 
 @Composable
 private fun TabDecrypt() {
+    val ctx = LocalContext.current
+    // Collect device inputs required for key generation (like Python GUI)
+    var model by remember { mutableStateOf("") }
+    var region by remember { mutableStateOf("") }
+    var imei by remember { mutableStateOf("") }
+
     var fw by remember { mutableStateOf("") }
     var encVer by remember { mutableStateOf("4") }
     var inFile by remember { mutableStateOf("") }
@@ -200,6 +263,8 @@ private fun TabDecrypt() {
     }
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
+        // Device inputs
+        DeviceInputs { m, r, i -> model = m; region = r; imei = i }
         OutlinedTextField(value = fw, onValueChange = { fw = it }, label = { Text("Firmware version") }, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -221,23 +286,67 @@ private fun TabDecrypt() {
         }
         Spacer(Modifier.height(8.dp))
         Button(onClick = {
-            // TODO: wire to decrypt logic; simulate
             busy = true
             progress = 0f
-        }, enabled = !busy && fw.isNotBlank() && inFile.isNotBlank() && outFile.isNotBlank()) { Text("Start decryption") }
-        Spacer(Modifier.height(8.dp))
-        LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth())
-
-        LaunchedEffect(busy) {
-            if (busy) {
-                val total = 100
-                for (i in 1..total) {
-                    progress = i / total.toFloat()
-                    kotlinx.coroutines.delay(20)
+            val enc = encVer.toIntOrNull() ?: 4
+            val inUri = Uri.parse(inFile)
+            val outUri = Uri.parse(outFile)
+            val resolver = ctx.contentResolver
+            // Obtain total length via AssetFileDescriptor (required for proper PKCS7 handling)
+            val afd = resolver.openAssetFileDescriptor(inUri, "r")
+            val totalLen = afd?.length ?: -1L
+            afd?.close()
+            if (totalLen <= 0L || totalLen % 16L != 0L) {
+                // Best-effort: cannot proceed without a valid multiple-of-16 length
+                busy = false
+                return@Button
+            }
+            val scope = rememberCoroutineScope()
+            scope.launch {
+                runCatching {
+                    resolver.openInputStream(inUri).use { ins ->
+                        resolver.openOutputStream(outUri, "w").use { outs ->
+                            requireNotNull(ins)
+                            requireNotNull(outs)
+                            val key: ByteArray = if (enc == 2) {
+                                app.samloader.common.auth.Auth.v2Key(fw, model, region)
+                            } else {
+                                val fus = FusClient()
+                                fus.generateNonce()
+                                fus.getV4Key(fw, model, region, imei)
+                            }
+                            var remaining = totalLen
+                            val read: () -> ByteArray? = {
+                                val toRead = if (remaining >= 4096) 4096 else remaining.toInt()
+                                if (toRead <= 0) null else {
+                                    val buf = ByteArray(toRead)
+                                    val n = ins.read(buf)
+                                    if (n <= 0) null else {
+                                        remaining -= n
+                                        if (n == buf.size) buf else buf.copyOf(n)
+                                    }
+                                }
+                            }
+                            val write: (ByteArray) -> Unit = { chunk -> outs.write(chunk); outs.flush() }
+                            app.samloader.common.crypt.decryptProgress(
+                                read = read,
+                                write = write,
+                                key = key,
+                                totalLen = totalLen,
+                                onProgress = { delta ->
+                                    progress = (1f - (remaining.toDouble() / totalLen.toDouble()).toFloat()).coerceIn(0f, 1f)
+                                }
+                            )
+                        }
+                    }
+                }.onFailure {
+                    // TODO: expose error to user via Snackbar/Toast if desired
                 }
                 busy = false
             }
-        }
+        }, enabled = !busy && fw.isNotBlank() && inFile.isNotBlank() && outFile.isNotBlank() && model.isNotBlank() && region.isNotBlank()) { Text("Start decryption") }
+        Spacer(Modifier.height(8.dp))
+        LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth())
     }
 }
 

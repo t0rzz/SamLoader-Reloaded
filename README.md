@@ -171,6 +171,11 @@ Project layout (new):
 - iosApp: iOS targets (unsigned builds)
 
 Build (CI): see .github/workflows/kmp-build.yml.
+
+Status:
+- Android UI: tabs implemented (Check Update, Download, Decrypt, History, Settings); download and decrypt are wired to shared logic. Unsigned debug APK is attached to Releases.
+- Desktop/iOS: placeholder UIs; shared logic present for version fetch, FUS requests, crypt, TAC DB; desktop/iOS UIs to be finalized.
+
 Local build examples:
 - Desktop (JVM): ./gradlew :desktop:build
 - Android (debug APK): ./gradlew :android:assembleDebug

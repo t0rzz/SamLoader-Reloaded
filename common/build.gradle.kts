@@ -17,6 +17,7 @@ kotlin {
                 implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
                 implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
                 implementation("io.ktor:ktor-client-logging:2.3.12")
+                implementation("com.soywiz.korlibs.krypto:krypto:4.0.10")
             }
         }
         val commonTest by getting
