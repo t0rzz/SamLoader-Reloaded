@@ -1,7 +1,6 @@
 plugins {
     id("com.android.application")
     kotlin("multiplatform")
-    id("org.jetbrains.compose")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
@@ -11,7 +10,7 @@ kotlin {
         val androidMain by getting {
             dependencies {
                 implementation(project(":common"))
-                implementation(platform("androidx.compose:compose-bom:2024.06.00"))
+                implementation(platform("androidx.compose:compose-bom:2024.08.00"))
                 implementation("androidx.compose.ui:ui")
                 implementation("androidx.compose.foundation:foundation")
                 implementation("androidx.compose.material:material")
