@@ -4,10 +4,10 @@ import korlibs.crypto.AES
 import korlibs.crypto.Padding
 
 actual fun aesCbcDecrypt(input: ByteArray, key: ByteArray, iv: ByteArray): ByteArray =
-    AES.decryptCBC(input, key, iv, padding = Padding.PKCS7Padding)
+    AES.decryptCbc(input, key, iv, padding = Padding.PKCS7)
 
 actual fun aesCbcEncrypt(input: ByteArray, key: ByteArray, iv: ByteArray): ByteArray =
-    AES.encryptCBC(input, key, iv, padding = Padding.PKCS7Padding)
+    AES.encryptCbc(input, key, iv, padding = Padding.PKCS7)
 
 actual fun aesEcbDecrypt(input: ByteArray, key: ByteArray): ByteArray =
-    AES.decryptECB(input, key)
+    AES.decryptEcb(input, key)
