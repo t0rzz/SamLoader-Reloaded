@@ -3,6 +3,9 @@ package dev.t0rzz.samloaderreloaded.ui
 
 import android.app.Activity
 import android.net.Uri
+import android.os.Build
+import android.content.pm.PackageManager
+import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -14,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import app.samloader.common.Api
 import app.samloader.common.data.Regions
 import app.samloader.common.version.VersionFetch
@@ -110,8 +114,23 @@ private fun TabCheckUpdate() {
 
 @Composable
 private fun TabDownload() {
-    val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    // Legacy storage permission helper for API <= 32
+    var permDeniedMsg by remember { mutableStateOf("") }
+    val requestStoragePerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) permDeniedMsg = "Storage permission denied"
+    }
+    fun ensureLegacyReadPerm(): Boolean {
+        if (Build.VERSION.SDK_INT <= 32) {
+            val granted = ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                requestStoragePerm.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+                return false
+            }
+        }
+        return true
+    }
     var model by remember { mutableStateOf("") }
     var region by remember { mutableStateOf("") }
     var imei by remember { mutableStateOf("") }
@@ -175,7 +194,7 @@ private fun TabDownload() {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(value = outDir, onValueChange = {}, enabled = false, label = { Text("Output directory (SAF URI)") }, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
-                Button(onClick = { pickDirLauncher.launch(null) }) { Text("Browse…") }
+                Button(onClick = { if (ensureLegacyReadPerm()) pickDirLauncher.launch(null) else permDeniedMsg = "Storage permission required" }) { Text("Browse…") }
             }
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -221,6 +240,9 @@ private fun TabDownload() {
             Spacer(Modifier.height(8.dp))
             LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth())
             Text(stats)
+            if (permDeniedMsg.isNotBlank()) {
+                Text(permDeniedMsg)
+            }
         }
 
         // Simple progress simulation so UI is usable now
@@ -242,6 +264,21 @@ private fun TabDownload() {
 private fun TabDecrypt() {
     val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
+    // Legacy storage permission helper for API <= 32
+    var permDeniedMsg by remember { mutableStateOf("") }
+    val requestStoragePerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) permDeniedMsg = "Storage permission denied"
+    }
+    fun ensureLegacyReadPerm(): Boolean {
+        if (Build.VERSION.SDK_INT <= 32) {
+            val granted = ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                requestStoragePerm.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+                return false
+            }
+        }
+        return true
+    }
     // Collect device inputs required for key generation (like Python GUI)
     var model by remember { mutableStateOf("") }
     var region by remember { mutableStateOf("") }
@@ -275,16 +312,17 @@ private fun TabDecrypt() {
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(value = inFile, onValueChange = {}, enabled = false, label = { Text("Encrypted file (URI)") }, modifier = Modifier.weight(1f))
             Spacer(Modifier.width(8.dp))
-            Button(onClick = { pickIn.launch(arrayOf("*/*")) }) { Text("Browse…") }
+            Button(onClick = { if (ensureLegacyReadPerm()) pickIn.launch(arrayOf("*/*")) else permDeniedMsg = "Storage permission required" }) { Text("Browse…") }
         }
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(value = outFile, onValueChange = {}, enabled = false, label = { Text("Output file (URI)") }, modifier = Modifier.weight(1f))
             Spacer(Modifier.width(8.dp))
-            Button(onClick = { pickOut.launch("firmware.zip") }) { Text("Browse…") }
+            Button(onClick = { if (ensureLegacyReadPerm()) pickOut.launch("firmware.zip") else permDeniedMsg = "Storage permission required" }) { Text("Browse…") }
         }
         Spacer(Modifier.height(8.dp))
         Button(onClick = {
+            if (!ensureLegacyReadPerm()) { permDeniedMsg = "Storage permission required"; return@Button }
             busy = true
             progress = 0f
             val enc = encVer.toIntOrNull() ?: 4
@@ -345,6 +383,9 @@ private fun TabDecrypt() {
         }, enabled = !busy && fw.isNotBlank() && inFile.isNotBlank() && outFile.isNotBlank() && model.isNotBlank() && region.isNotBlank()) { Text("Start decryption") }
         Spacer(Modifier.height(8.dp))
         LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth())
+        if (permDeniedMsg.isNotBlank()) {
+            Text(permDeniedMsg)
+        }
     }
 }
 

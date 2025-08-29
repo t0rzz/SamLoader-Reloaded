@@ -173,8 +173,8 @@ Project layout (new):
 Build (CI): see .github/workflows/kmp-build.yml.
 
 Status:
-- Android UI: tabs implemented (Check Update, Download, Decrypt, History, Settings); download and decrypt are wired to shared logic. Unsigned debug APK is attached to Releases.
-- Desktop/iOS: placeholder UIs; shared logic present for version fetch, FUS requests, crypt, TAC DB; desktop/iOS UIs to be finalized.
+- Android and Desktop: Full UI (Check Update, Download, Decrypt, History, Settings) wired to shared logic (FUS requests, version fetch, crypt/decrypt, TAC DB). Desktop (JVM) artifacts build via :desktop:build; Android debug APK attached to Releases.
+- iOS: Full UI (tabs: Check Update, Download, Decrypt, History, Settings) with complete file pickers and file I/O UX (open/save via iOS Document Picker) wired to shared logic. Unsigned frameworks and optional unsigned IPA are produced in CI.
 
 Local build examples:
 - Desktop (JVM): ./gradlew :desktop:build
@@ -184,3 +184,16 @@ Local build examples:
 Notes:
 - Existing Python CLI/GUI remains temporarily as a reference and will be removed after KMP feature parity.
 - KMP artifacts are unsigned; users can sign/distribute as needed (Android/iOS).
+
+
+
+## Permissions & File Access
+
+Android
+- File pickers and I/O use the Storage Access Framework (SAF): OpenDocument, CreateDocument, and OpenDocumentTree. This allows reading/writing without broad storage access.
+- For legacy devices on Android 12L (API 32) and below, Duofrost requests READ_EXTERNAL_STORAGE at runtime when you pick or open files. The permission is declared in the manifest with android:maxSdkVersion=32 and requested only on devices that need it. On Android 13+ (API 33+), no storage permission is required.
+- Network access uses the INTERNET permission.
+
+iOS
+- File pickers are implemented using the iOS Document Picker. Duofrost opens files and folders using security‑scoped bookmarks (startAccessingSecurityScopedResource / stopAccessingSecurityScopedResource) to ensure compliant access outside the app sandbox.
+- No additional Info.plist usage descriptions are required for these operations since the standard document picker is used (no Photos/Camera access).

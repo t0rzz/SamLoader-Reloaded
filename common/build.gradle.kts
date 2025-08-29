@@ -32,6 +32,7 @@ kotlin {
             dependsOn(commonMain)
             dependencies {
                 implementation("io.ktor:ktor-client-darwin:2.3.12")
+                implementation("com.soywiz.korlibs.krypto:krypto:4.0.10")
             }
         }
         val iosArm64Main by getting { dependsOn(iosMain) }

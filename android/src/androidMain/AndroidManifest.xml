@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest package="dev.t0rzz.samloaderreloaded" xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- For legacy devices (API <= 32) when user picks files from external storage -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+
     <application android:label="Duofrost">
         <activity android:name=".MainActivity"
             android:exported="true">
