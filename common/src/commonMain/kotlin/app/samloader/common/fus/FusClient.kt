@@ -175,6 +175,6 @@ private fun HttpResponse.setCookieFromResponse(): String? {
 }
 
 private fun io.ktor.client.request.HttpRequestBuilder.setBodyXml(xml: String) {
-    io.ktor.http.contentType(io.ktor.http.ContentType.Text.Xml)
+    header("Content-Type", "text/xml")
     setBody(xml)
 }
