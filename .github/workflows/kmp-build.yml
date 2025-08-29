@@ -112,108 +112,90 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-      - name: Show Xcode version
+
+      - name: Check Xcode & SDK
         run: |
+          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer || true
           xcodebuild -version
           xcodebuild -showsdks
-          xcrun --sdk iphoneos --show-sdk-path
-      - name: Export SDKROOT for Kotlin/Native
-        run: echo "SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)" >> $GITHUB_ENV
-      - name: iOS SDK diagnostics
-        shell: bash
-        run: |
-          set -e
-          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
           SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)
           echo "SDKROOT=$SDKROOT"
-          echo "Xcode path: $(xcode-select -p)"
-          echo "SDK list:"
-          ls -la /Applications | grep Xcode || true
-          echo "SDK usr/include content (if present):"
-          ls -la "$SDKROOT/usr/include" || true
-          echo "Check for CommonCrypto.h files (Applications):"
-          find /Applications -name CommonCrypto.h -maxdepth 6 -print 2>/dev/null || true
-          echo "Check for CommonCrypto.h files (SDKROOT):"
-          find "$SDKROOT" -name CommonCrypto.h -print 2>/dev/null || true
-          echo "clang include test:"
-          clang -v -E -x c - -isysroot "$SDKROOT" -include CommonCrypto/CommonCrypto.h </dev/null >/dev/null 2>&1 || echo "clang include test FAILED"
-          echo "clang include search paths:"
-          clang -v -E -x c /dev/null -isysroot "$SDKROOT" 2>&1 | sed -n '/#include <...> search starts here:/,/#include <...> search ends here:/p'
-          echo "Konan/Kotlin Native user directory:"
-          echo "KONAN_USER_DIR=${KONAN_USER_DIR:-/Users/runner/.konan}"
-          ls -la /Users/runner/.konan || true
-          ls -la /Users/runner/.konan/dependencies || true
-          ls -la /Users/runner/.konan/kotlinc || true
-      - name: Set up JDK 17
+          echo "SDKROOT=$SDKROOT" >> $GITHUB_ENV
+
+      - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
+
+      - name: Prepare environment (clean konan caches)
+        run: |
+          # Clean Kotlin/Native caches to force re-download of sysroot/toolchain
+          rm -rf /Users/runner/.konan/dependencies || true
+          rm -rf /Users/runner/.konan/kotlinc || true
+          # show basic konan dir contents for debug
+          ls -la /Users/runner/.konan || true
+
+      - name: Quick SDK include debug (search CommonCrypto.h + clang include test)
+        run: |
+          SDKROOT=${SDKROOT:-$(xcrun --sdk iphoneos --show-sdk-path)}
+          echo "Using SDKROOT=$SDKROOT"
+          echo "Searching for CommonCrypto.h..."
+          find "$SDKROOT" -name CommonCrypto.h -print 2>/dev/null || true
+          find /Applications -name CommonCrypto.h -maxdepth 6 -print 2>/dev/null || true
+          echo "Listing $SDKROOT/usr/include (if exists):"
+          ls -la "$SDKROOT/usr/include" || true
+          echo "clang include search paths:"
+          clang -v -E -x c /dev/null -isysroot "$SDKROOT" 2>&1 | sed -n '/#include <...> search starts here:/,/#include <...> search ends here:/p'
+          echo "Running clang preprocessor test (will FAIL if CommonCrypto.h unreachable):"
+          clang -v -E -x c - -isysroot "$SDKROOT" -include <CommonCrypto/CommonCrypto.h> </dev/null >/dev/null 2>&1 || echo "clang include test FAILED"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
-      - name: Clean Konan caches (pre-cinterop)
+
+      - name: Run cinterop task with info (debug)
         run: |
-          rm -rf /Users/runner/.konan/dependencies || true
-          rm -rf /Users/runner/.konan/kotlinc || true
-      - name: Run CommonCrypto cinterop (debug)
-        shell: bash
+          ./gradlew :common:cinteropCommoncryptoIosArm64 --no-daemon --info --stacktrace | tee cinterop-info.log || true
+          tail -n 300 cinterop-info.log || true
+        env:
+          SDKROOT: ${{ env.SDKROOT }}
+
+      - name: Build iOS frameworks (Gradle)
         run: |
-          set -e
-          ./gradlew :common:cinteropCommoncryptoIosArm64 --no-daemon --info --stacktrace > cinterop-info.log 2>&1 || true
-          echo "--- tail cinterop-info.log ---"
-          tail -n 400 cinterop-info.log || true
-          echo "--- end tail ---"
-      - name: Clean Konan caches (before final build)
+          # If cinterop passed, build the iOS frameworks / gradle iOS target
+          ./gradlew :iosApp:build --no-daemon --info --stacktrace
+        env:
+          SDKROOT: ${{ env.SDKROOT }}
+
+      - name: (Optional) Build iOS app with Xcode (unsigned IPA)
+        if: always()
         run: |
-          rm -rf /Users/runner/.konan/dependencies || true
-          rm -rf /Users/runner/.konan/kotlinc || true
-      - name: Build iOS frameworks (unsigned)
-        uses: gradle/gradle-build-action@v2
-        with:
-          gradle-version: 8.7
-          arguments: :iosApp:build --stacktrace --no-daemon
-      - name: Build iOS app with Xcode (unsigned IPA)
-        run: |
-          set -e
-          # Create a minimal iOS app using Xcodegen-like steps if needed
-          # If an Xcode project exists under iosApp/iosApp.xcodeproj, use it; otherwise, create a stub Compose MPP iOS app via Gradle export
+          # Only run this if you actually have an Xcode project in iosApp/
           if [ -d "iosApp/iosApp.xcodeproj" ]; then
+            sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+            SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)
             xcodebuild -scheme iosApp -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
             APP_PATH=$(find build -type d -name "*.app" -path "*Release-iphoneos*" | head -n1)
+            echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
           else
             echo "No Xcode project found. Skipping IPA creation."
-            APP_PATH=""
           fi
-          echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
+
       - name: Package IPA (unsigned)
         if: env.APP_PATH != ''
         run: |
-          set -e
-          rm -rf Payload
+          rm -rf Payload || true
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
-          zip -r Duofrost-unsigned.ipa Payload
-      - name: Upload unsigned IPA artifact
-        if: env.APP_PATH != ''
+          zip -r ios-unsigned.ipa Payload
+
+      - name: Upload IPA and frameworks (artifacts)
         uses: actions/upload-artifact@v4
         with:
-          name: ios-unsigned-ipa
-          path: Duofrost-unsigned.ipa
-      - name: Package iOS frameworks
-        run: |
-          set -e
-          mkdir -p ios-out
-          find iosApp/build/bin -type d -name "*Framework" -print0 | while IFS= read -r -d '' dir; do
-            base=$(basename "$dir")
-            zip -r "ios-out/${base}.zip" "$dir"
-          done
-      - name: Upload iOS frameworks (artifact)
-        uses: actions/upload-artifact@v4
-        with:
-          name: duofrost-ios-frameworks
-          path: ios-out/*.zip
+          name: ios-artifacts
+          path: |
+            ios-unsigned.ipa
+            iosApp/build/bin/**/Framework*.zip
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
