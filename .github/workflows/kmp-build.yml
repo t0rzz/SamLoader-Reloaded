@@ -117,6 +117,7 @@ jobs:
       - name: Show Xcode version
         run: |
           xcodebuild -version
+          xcodebuild -showsdks
           xcrun --sdk iphoneos --show-sdk-path
       - name: Export SDKROOT for Kotlin/Native
         run: echo "SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)" >> $GITHUB_ENV
@@ -140,8 +141,11 @@ jobs:
           clang -v -E -x c - -isysroot "$SDKROOT" -include CommonCrypto/CommonCrypto.h </dev/null >/dev/null 2>&1 || echo "clang include test FAILED"
           echo "clang include search paths:"
           clang -v -E -x c /dev/null -isysroot "$SDKROOT" 2>&1 | sed -n '/#include <...> search starts here:/,/#include <...> search ends here:/p'
-          echo "KONAN cache dir listing:"
+          echo "Konan/Kotlin Native user directory:"
+          echo "KONAN_USER_DIR=${KONAN_USER_DIR:-/Users/runner/.konan}"
           ls -la /Users/runner/.konan || true
+          ls -la /Users/runner/.konan/dependencies || true
+          ls -la /Users/runner/.konan/kotlinc || true
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -154,10 +158,13 @@ jobs:
           rm -rf /Users/runner/.konan/dependencies || true
           rm -rf /Users/runner/.konan/kotlinc || true
       - name: Run CommonCrypto cinterop (debug)
-        uses: gradle/gradle-build-action@v2
-        with:
-          gradle-version: 8.7
-          arguments: :common:cinteropCommoncryptoIosArm64 --info --stacktrace --no-daemon
+        shell: bash
+        run: |
+          set -e
+          ./gradlew :common:cinteropCommoncryptoIosArm64 --no-daemon --info --stacktrace > cinterop-info.log 2>&1 || true
+          echo "--- tail cinterop-info.log ---"
+          tail -n 400 cinterop-info.log || true
+          echo "--- end tail ---"
       - name: Clean Konan caches (before final build)
         run: |
           rm -rf /Users/runner/.konan/dependencies || true
