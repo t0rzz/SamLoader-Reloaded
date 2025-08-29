@@ -16,6 +16,7 @@ kotlin {
                 implementation("androidx.compose.material:material")
                 implementation("androidx.compose.ui:ui-text")
                 implementation("androidx.activity:activity-compose:1.9.2")
+                implementation("io.ktor:ktor-client-okhttp:2.3.12")
             }
         }
     }
@@ -29,8 +30,8 @@ android {
         applicationId = "dev.t0rzz.samloaderreloaded"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10023
-        versionName = "1.0.23"
+        versionCode = 10025
+        versionName = "1.0.25"
     }
 
     compileOptions {

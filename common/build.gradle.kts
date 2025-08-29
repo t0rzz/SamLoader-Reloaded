@@ -24,7 +24,7 @@ kotlin {
         val commonTest by getting
         val jvmMain by getting {
             dependencies {
-                implementation("io.ktor:ktor-client-java:2.3.12")
+                implementation("io.ktor:ktor-client-cio:2.3.12")
             }
         }
         // Removed androidMain to avoid AGP requirement in :common
