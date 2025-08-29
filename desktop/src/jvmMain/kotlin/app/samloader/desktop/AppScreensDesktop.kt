@@ -255,6 +255,7 @@ private fun TabDecryptDesktop() {
     }
 }
 
+@OptIn(androidx.compose.material.ExperimentalMaterialApi::class)
 @Composable
 private fun TabHistoryDesktop() {
     var items by remember { mutableStateOf(listOf<String>()) }
