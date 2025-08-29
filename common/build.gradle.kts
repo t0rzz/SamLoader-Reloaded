@@ -9,6 +9,14 @@ kotlin {
     iosX64()
     iosSimulatorArm64()
 
+    targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget> {
+        compilations.getByName("main").cinterops {
+            val commoncrypto by creating {
+                defFile(project.file("src/nativeInterop/cinterop/commoncrypto.def"))
+            }
+        }
+    }
+
     sourceSets {
         val commonMain by getting {
             dependencies {
