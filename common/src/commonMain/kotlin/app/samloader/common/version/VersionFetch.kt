@@ -19,12 +19,12 @@ object VersionFetch {
 
     suspend fun getLatest(model: String, region: String): String {
         // KMP HTTP client using Ktor; simple retries with 5s timeout
-        val client = io.ktor.client.HttpClient(provideEngine()) {
+        val client = HttpClient(provideEngine()) {
             install(io.ktor.client.plugins.contentnegotiation.ContentNegotiation) {
                 kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
             }
-            install(io.ktor.client.plugins.logging.Logging)
-            install(io.ktor.client.plugins.HttpTimeout) {
+            install(Logging)
+            install(HttpTimeout) {
                 requestTimeoutMillis = 5000
                 connectTimeoutMillis = 5000
                 socketTimeoutMillis = 5000
@@ -32,23 +32,42 @@ object VersionFetch {
             expectSuccess = true
         }
         var last: Throwable? = null
-        repeat(5) { attempt ->
-            try {
-                val url = "https://fota-cloud-dn.ospserver.net/firmware/${region}/${model}/version.xml"
-                val text: String = client.get(url) {
-                    header("User-Agent", "curl/7.87.0")
-                }.body()
-                // very small XML parsing: extract <latest>…</latest>
-                val regex = Regex("<latest>(.*?)</latest>")
-                val match = regex.find(text)
-                val verRaw = match?.groupValues?.getOrNull(1) ?: error("No latest firmware available")
-                client.close()
-                return normalize(verRaw)
-            } catch (t: Throwable) {
-                last = t
-                if (attempt < 4) return@repeat
+        try {
+            repeat(5) { attempt ->
+                try {
+                    val url = "https://fota-cloud-dn.ospserver.net/firmware/${region}/${model}/version.xml"
+                    val text: String = client.get(url) {
+                        header("User-Agent", "curl/7.87.0")
+                        header("Accept", "text/xml, application/xml;q=0.9, */*;q=0.8")
+                    }.body()
+                    // More robust XML extraction similar to Python's structure.
+                    val regex = Regex("(?s)<latest>\\s*([^<]+)\\s*</latest>") // DOTALL, trim inside
+                    val verRaw = regex.find(text)?.groupValues?.getOrNull(1)?.trim()
+                    if (verRaw.isNullOrEmpty()) {
+                        // If a <latest> tag exists but is empty/self-closing, treat as 'no latest' (align with Python)
+                        val emptyLatestRegex = Regex("(?s)<latest(\n|\r|\t|\s)*(/>|>\s*</latest>)")
+                        val hasEmptyLatest = emptyLatestRegex.containsMatchIn(text)
+                        if (hasEmptyLatest) {
+                            error("No latest firmware available")
+                        }
+                        // Try a more specific path in case of nested tags/newlines
+                        val regex2 = Regex("(?s)<firmware>.*?<version>.*?<latest>\\s*([^<]+)\\s*</latest>")
+                        val alt = regex2.find(text)?.groupValues?.getOrNull(1)?.trim()
+                        if (alt.isNullOrEmpty()) {
+                            throw IllegalStateException("Parse error: <latest> tag not found in version.xml; sample=" + text.take(200).replace("\n"," ").replace("\r"," "))
+                        } else {
+                            return normalize(alt)
+                        }
+                    }
+                    return normalize(verRaw)
+                } catch (t: Throwable) {
+                    last = t
+                    if (attempt < 4) return@repeat else throw t
+                }
             }
+            throw last ?: IllegalStateException("Unknown error while fetching latest version")
+        } finally {
+            try { client.close() } catch (_: Throwable) {}
         }
-        throw last ?: IllegalStateException("Failed to fetch latest version")
     }
 }

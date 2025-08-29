@@ -99,7 +99,7 @@ private fun TabCheckUpdate() {
                 busy = true
                 scope.launch {
                     runCatching { VersionFetch.getLatest(model, region) }
-                        .onSuccess { latest = it }
+                        .onSuccess { latest = formatLatest(it) }
                         .onFailure { latest = "Error: ${it.message ?: "failed"}" }
                     busy = false
                 }

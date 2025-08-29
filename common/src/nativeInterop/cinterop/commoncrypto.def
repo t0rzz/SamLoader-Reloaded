@@ -1,3 +1,2 @@
 headers = <CommonCrypto/CommonCrypto.h> <CommonCrypto/CommonCryptor.h>
-compilerOpts = -fmodules
 linkerOpts = -framework CommonCrypto
