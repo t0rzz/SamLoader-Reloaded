@@ -1,3 +1,4 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
 package app.samloader.common.crypto
 
 import kotlinx.cinterop.*
