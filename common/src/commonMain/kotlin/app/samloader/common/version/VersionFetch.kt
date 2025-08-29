@@ -6,6 +6,7 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import app.samloader.common.network.provideEngine
 
 object VersionFetch {
     fun normalize(vercode: String): String {
@@ -18,7 +19,7 @@ object VersionFetch {
 
     suspend fun getLatest(model: String, region: String): String {
         // KMP HTTP client using Ktor; simple retries with 5s timeout
-        val client = io.ktor.client.HttpClient {
+        val client = io.ktor.client.HttpClient(provideEngine()) {
             install(io.ktor.client.plugins.contentnegotiation.ContentNegotiation) {
                 kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
             }

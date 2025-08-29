@@ -9,6 +9,7 @@ import io.ktor.client.request.get
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import app.samloader.common.network.provideEngine
 
 object Regions {
     private const val REMOTE_URL = "https://raw.githubusercontent.com/t0rzz/SamLoader-Reloaded/master/samloader/data/regions.json"
@@ -27,7 +28,7 @@ object Regions {
 
     suspend fun getRegions(): Map<String, String> {
         // Remote (preferred)
-        val client = HttpClient {
+        val client = HttpClient(provideEngine()) {
             install(Logging)
             install(ContentNegotiation) { json(json) }
             install(HttpTimeout) {

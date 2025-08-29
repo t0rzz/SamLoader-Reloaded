@@ -11,12 +11,13 @@ import io.ktor.client.statement.bodyAsChannel
 import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import app.samloader.common.network.provideEngine
 
 /** KMP FUS client (scaffold). */
 class FusClient {
     data class BinaryInfo(val path: String, val filename: String, val size: Long)
 
-    private val client = HttpClient {
+    private val client = HttpClient(provideEngine()) {
         install(Logging)
         install(HttpTimeout) {
             requestTimeoutMillis = 5000

@@ -11,6 +11,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.random.Random
+import app.samloader.common.network.provideEngine
 
 object TacDb {
     private const val TACS_URL = "https://raw.githubusercontent.com/zacharee/SamloaderKotlin/refs/heads/master/common/src/commonMain/moko-resources/files/tacs.csv"
@@ -22,7 +23,7 @@ object TacDb {
         if (modelToTacs.isNotEmpty()) return
         initMutex.withLock {
             if (modelToTacs.isNotEmpty()) return
-            val client = HttpClient {
+            val client = HttpClient(provideEngine()) {
                 install(Logging)
                 install(ContentNegotiation) { json() }
                 install(HttpTimeout) {
