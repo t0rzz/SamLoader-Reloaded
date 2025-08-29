@@ -120,6 +120,28 @@ jobs:
           xcrun --sdk iphoneos --show-sdk-path
       - name: Export SDKROOT for Kotlin/Native
         run: echo "SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)" >> $GITHUB_ENV
+      - name: iOS SDK diagnostics
+        shell: bash
+        run: |
+          set -e
+          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)
+          echo "SDKROOT=$SDKROOT"
+          echo "Xcode path: $(xcode-select -p)"
+          echo "SDK list:"
+          ls -la /Applications | grep Xcode || true
+          echo "SDK usr/include content (if present):"
+          ls -la "$SDKROOT/usr/include" || true
+          echo "Check for CommonCrypto.h files (Applications):"
+          find /Applications -name CommonCrypto.h -maxdepth 6 -print 2>/dev/null || true
+          echo "Check for CommonCrypto.h files (SDKROOT):"
+          find "$SDKROOT" -name CommonCrypto.h -print 2>/dev/null || true
+          echo "clang include test:"
+          clang -v -E -x c - -isysroot "$SDKROOT" -include CommonCrypto/CommonCrypto.h </dev/null >/dev/null 2>&1 || echo "clang include test FAILED"
+          echo "clang include search paths:"
+          clang -v -E -x c /dev/null -isysroot "$SDKROOT" 2>&1 | sed -n '/#include <...> search starts here:/,/#include <...> search ends here:/p'
+          echo "KONAN cache dir listing:"
+          ls -la /Users/runner/.konan || true
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -127,6 +149,19 @@ jobs:
           java-version: '17'
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
+      - name: Clean Konan caches (pre-cinterop)
+        run: |
+          rm -rf /Users/runner/.konan/dependencies || true
+          rm -rf /Users/runner/.konan/kotlinc || true
+      - name: Run CommonCrypto cinterop (debug)
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 8.7
+          arguments: :common:cinteropCommoncryptoIosArm64 --info --stacktrace --no-daemon
+      - name: Clean Konan caches (before final build)
+        run: |
+          rm -rf /Users/runner/.konan/dependencies || true
+          rm -rf /Users/runner/.konan/kotlinc || true
       - name: Build iOS frameworks (unsigned)
         uses: gradle/gradle-build-action@v2
         with:

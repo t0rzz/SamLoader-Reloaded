@@ -17,7 +17,7 @@ kotlin {
                 val sdkRoot = System.getenv("SDKROOT")
                 if (!sdkRoot.isNullOrBlank()) {
                     // Help cinterop find system headers when running in CI
-                    compilerOpts("-isysroot", sdkRoot, "-I$sdkRoot/usr/include")
+                    compilerOpts("-isysroot", sdkRoot, "-I$sdkRoot/usr/include", "-F$sdkRoot/System/Library/Frameworks")
                     includeDirs(project.file("$sdkRoot/usr/include"))
                 }
             }
