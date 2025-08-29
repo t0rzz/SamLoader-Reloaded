@@ -41,17 +41,17 @@ object VersionFetch {
                         header("Accept", "text/xml, application/xml;q=0.9, */*;q=0.8")
                     }.body()
                     // More robust XML extraction similar to Python's structure.
-                    val regex = Regex("(?s)<latest>\\s*([^<]+)\\s*</latest>") // DOTALL, trim inside
+                    val regex = Regex("""(?s)<latest>\s*([^<]+)\s*</latest>""") // DOTALL, trim inside
                     val verRaw = regex.find(text)?.groupValues?.getOrNull(1)?.trim()
                     if (verRaw.isNullOrEmpty()) {
                         // If a <latest> tag exists but is empty/self-closing, treat as 'no latest' (align with Python)
-                        val emptyLatestRegex = Regex("(?s)<latest(\n|\r|\t|\s)*(/>|>\s*</latest>)")
+                        val emptyLatestRegex = Regex("""(?s)<latest([\n\r\t\s])*(/\>|>\s*</latest>)""")
                         val hasEmptyLatest = emptyLatestRegex.containsMatchIn(text)
                         if (hasEmptyLatest) {
                             error("No latest firmware available")
                         }
                         // Try a more specific path in case of nested tags/newlines
-                        val regex2 = Regex("(?s)<firmware>.*?<version>.*?<latest>\\s*([^<]+)\\s*</latest>")
+                        val regex2 = Regex("""(?s)<firmware>.*?<version>.*?<latest>\s*([^<]+)\s*</latest>""")
                         val alt = regex2.find(text)?.groupValues?.getOrNull(1)?.trim()
                         if (alt.isNullOrEmpty()) {
                             throw IllegalStateException("Parse error: <latest> tag not found in version.xml; sample=" + text.take(200).replace("\n"," ").replace("\r"," "))
