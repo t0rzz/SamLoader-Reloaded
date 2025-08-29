@@ -6,18 +6,9 @@ import kotlinx.cinterop.alloc
 import kotlinx.cinterop.convert
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
-import kotlinx.cinterop.size_tVar
+import kotlinx.cinterop.ULongVar
 import kotlinx.cinterop.usePinned
-import platform.CommonCrypto.CCOptions
-import platform.CommonCrypto.CCOperation
-import platform.CommonCrypto.CCCrypt
-import platform.CommonCrypto.kCCAlgorithmAES
-import platform.CommonCrypto.kCCBlockSizeAES128
-import platform.CommonCrypto.kCCDecrypt
-import platform.CommonCrypto.kCCEncrypt
-import platform.CommonCrypto.kCCOptionECBMode
-import platform.CommonCrypto.kCCOptionPKCS7Padding
-import platform.CommonCrypto.kCCSuccess
+import commoncrypto.*
 
 @OptIn(ExperimentalForeignApi::class)
 private fun ccCrypt(
@@ -32,7 +23,7 @@ private fun ccCrypt(
     val out = ByteArray(outCapacity)
 
     var statusCode = -1
-    val outLenVar = alloc<size_tVar>()
+    val outLenVar = alloc<ULongVar>()
 
     input.usePinned { inPinned ->
         key.usePinned { keyPinned ->

@@ -1,0 +1,3 @@
+headers = <CommonCrypto/CommonCrypto.h>
+package = commoncrypto
+compilerOpts = -framework CommonCrypto

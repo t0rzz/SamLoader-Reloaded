@@ -13,7 +13,7 @@ kotlin {
     targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget> {
         compilations.getByName("main").cinterops {
             val commoncrypto by creating {
-                defFile(project.file("src/nativeInterop/cinterop/commoncrypto.def"))
+                defFile(project.file("src/nativeInterop/cinterop/ios/commoncrypto.def"))
             }
         }
     }
