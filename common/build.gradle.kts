@@ -14,6 +14,12 @@ kotlin {
         compilations.getByName("main").cinterops {
             val commoncrypto by creating {
                 defFile(project.file("src/nativeInterop/cinterop/ios/commoncrypto.def"))
+                val sdkRoot = System.getenv("SDKROOT")
+                if (!sdkRoot.isNullOrBlank()) {
+                    // Help cinterop find system headers when running in CI
+                    compilerOpts("-isysroot", sdkRoot, "-I$sdkRoot/usr/include")
+                    includeDirs(project.file("$sdkRoot/usr/include"))
+                }
             }
         }
     }
