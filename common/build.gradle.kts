@@ -56,10 +56,20 @@ kotlin {
                 implementation("com.soywiz.korlibs.krypto:krypto:4.0.10")
             }
         }
-        val commonTest by getting
+        val commonTest by getting {
+            dependencies {
+                implementation(kotlin("test"))
+            }
+        }
         val jvmMain by getting {
             dependencies {
                 implementation("io.ktor:ktor-client-cio:2.3.12")
+            }
+        }
+        val jvmTest by getting {
+            dependencies {
+                implementation(kotlin("test-junit"))
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
             }
         }
         // Removed androidMain to avoid AGP requirement in :common

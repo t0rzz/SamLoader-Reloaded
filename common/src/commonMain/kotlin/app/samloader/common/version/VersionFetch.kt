@@ -3,12 +3,25 @@ package app.samloader.common.version
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.logging.LogLevel
+import io.ktor.client.plugins.logging.Logger
 import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import app.samloader.common.network.provideEngine
 
 object VersionFetch {
+    data class RequestShape(val url: String, val headers: Map<String, String>)
+
+    fun buildRequest(model: String, region: String): RequestShape {
+        val url = "https://fota-cloud-dn.ospserver.net/firmware/${region}/${model}/version.xml"
+        val headers = mapOf(
+            // Match Python exactly
+            "User-Agent" to "curl/7.87.0"
+        )
+        return RequestShape(url, headers)
+    }
+
     fun normalize(vercode: String): String {
         val parts = vercode.split('/')
         val mod = parts.toMutableList()
@@ -18,12 +31,22 @@ object VersionFetch {
     }
 
     suspend fun getLatest(model: String, region: String): String {
-        // KMP HTTP client using Ktor; simple retries with 5s timeout
         val client = HttpClient(provideEngine()) {
             install(io.ktor.client.plugins.contentnegotiation.ContentNegotiation) {
                 kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
             }
-            install(Logging)
+            if (app.samloader.common.network.isHttpDebug()) {
+                install(Logging) {
+                    logger = object : Logger {
+                        override fun log(message: String) {
+                            // Keep logs at DEBUG: on Android they appear in Logcat via stdout; redact sensitive headers
+                            println(message)
+                        }
+                    }
+                    level = LogLevel.ALL
+                    redactHeaderNames = setOf("Authorization", "Cookie", "Set-Cookie")
+                }
+            }
             install(HttpTimeout) {
                 requestTimeoutMillis = 5000
                 connectTimeoutMillis = 5000
@@ -35,29 +58,22 @@ object VersionFetch {
         try {
             repeat(5) { attempt ->
                 try {
-                    val url = "https://fota-cloud-dn.ospserver.net/firmware/${region}/${model}/version.xml"
-                    val text: String = client.get(url) {
-                        header("User-Agent", "curl/7.87.0")
-                        header("Accept", "text/xml, application/xml;q=0.9, */*;q=0.8")
+                    val req = buildRequest(model, region)
+                    val text: String = client.get(req.url) {
+                        req.headers.forEach { (k, v) -> header(k, v) }
                     }.body()
-                    // More robust XML extraction similar to Python's structure.
-                    val regex = Regex("""(?s)<latest>\s*([^<]+)\s*</latest>""") // DOTALL, trim inside
+                    // XML extraction
+                    val regex = Regex("""(?s)<latest>\s*([^<]+)\s*</latest>""")
                     val verRaw = regex.find(text)?.groupValues?.getOrNull(1)?.trim()
                     if (verRaw.isNullOrEmpty()) {
-                        // If a <latest> tag exists but is empty/self-closing, treat as 'no latest' (align with Python)
                         val emptyLatestRegex = Regex("""(?s)<latest([\n\r\t\s])*(/\>|>\s*</latest>)""")
                         val hasEmptyLatest = emptyLatestRegex.containsMatchIn(text)
-                        if (hasEmptyLatest) {
-                            error("No latest firmware available")
-                        }
-                        // Try a more specific path in case of nested tags/newlines
+                        if (hasEmptyLatest) error("No latest firmware available")
                         val regex2 = Regex("""(?s)<firmware>.*?<version>.*?<latest>\s*([^<]+)\s*</latest>""")
                         val alt = regex2.find(text)?.groupValues?.getOrNull(1)?.trim()
                         if (alt.isNullOrEmpty()) {
                             throw IllegalStateException("Parse error: <latest> tag not found in version.xml; sample=" + text.take(200).replace("\n"," ").replace("\r"," "))
-                        } else {
-                            return normalize(alt)
-                        }
+                        } else return normalize(alt)
                     }
                     return normalize(verRaw)
                 } catch (t: Throwable) {
