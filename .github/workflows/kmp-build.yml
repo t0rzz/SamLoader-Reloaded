@@ -181,23 +181,19 @@ jobs:
             zip -r "ios-out/${base}.zip" "$dir"
           done || true
 
-      - name: (Optional) Build iOS app with Xcode (unsigned IPA)
-        if: always()
+      - name: Generate Xcode project (XcodeGen)
         run: |
-          if [ -d "iosApp/iosApp.xcodeproj" ]; then
-            # Use explicit Xcode selection if present
-            if [ -d "/Applications/Xcode_16.4.app" ]; then
-              sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
-            else
-              sudo xcode-select -s /Applications/Xcode.app/Contents/Developer || true
-            fi
-            SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)
-            xcodebuild -scheme iosApp -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
-            APP_PATH=$(find build -type d -name "*.app" -path "*Release-iphoneos*" | head -n1)
-            echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
-          else
-            echo "No Xcode project found. Skipping IPA creation."
-          fi
+          brew update
+          brew install xcodegen || true
+          (cd iosApp && xcodegen generate --spec xcodegen/project.yml)
+      - name: Build KMP iOS frameworks (Release, device)
+        run: ./gradlew :common:linkReleaseFrameworkIosArm64 :iosApp:linkReleaseFrameworkIosArm64 --no-daemon --stacktrace
+      - name: Build iOS app with Xcode (unsigned IPA)
+        run: |
+          DERIVED="build/iosDerivedData"
+          xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -sdk iphoneos -configuration Release -derivedDataPath "$DERIVED" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
+          APP_PATH="$DERIVED/Build/Products/Release-iphoneos/Duofrost.app"
+          echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
 
       - name: Package IPA (unsigned)
         if: env.APP_PATH != ''

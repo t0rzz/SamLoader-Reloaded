@@ -1,0 +1,66 @@
+name: iosApp
+options:
+  deploymentTarget:
+    iOS: '14.0'
+  xcodeVersion: '16.0'
+  createIntermediateGroups: true
+
+settings:
+  base:
+    PRODUCT_BUNDLE_IDENTIFIER: dev.t0rzz.duofrost
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGNING_REQUIRED: NO
+    CODE_SIGNING_ALLOWED: NO
+    ENABLE_BITCODE: NO
+    SWIFT_VERSION: 5.0
+
+packages: {}
+
+targets:
+  iosApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    info:
+      path: Info.plist
+      properties:
+        CFBundleIdentifier: dev.t0rzz.duofrost
+        CFBundleName: Duofrost
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UIRequiresFullScreen: true
+    settings:
+      base:
+        INFOPLIST_FILE: Info.plist
+        PRODUCT_NAME: Duofrost
+        IPHONEOS_DEPLOYMENT_TARGET: 14.0
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
+    prebuildScripts:
+      - name: Copy KMP frameworks
+        script: |
+          set -e
+          DEST="${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}"
+          mkdir -p "$DEST"
+          # Prefer iosApp module frameworks
+          # Support both naming styles (Kotlin Gradle versions differ)
+          IOSAPP_FW_DIR1="${PROJECT_DIR}/build/bin/iosArm64/ReleaseFramework"
+          IOSAPP_FW_DIR2="${PROJECT_DIR}/build/bin/iosArm64/releaseFramework"
+          COMMON_FW_DIR1="${PROJECT_DIR}/../common/build/bin/iosArm64/ReleaseFramework"
+          COMMON_FW_DIR2="${PROJECT_DIR}/../common/build/bin/iosArm64/releaseFramework"
+          COPIED=0
+          for SRC in "$IOSAPP_FW_DIR1" "$IOSAPP_FW_DIR2" "$COMMON_FW_DIR1" "$COMMON_FW_DIR2"; do
+            if [ -d "$SRC" ]; then
+              echo "Copying KMP frameworks from $SRC to $DEST"
+              rsync -av "$SRC/" "$DEST/"
+              COPIED=1
+            fi
+          done
+          if [ "$COPIED" -eq 0 ]; then
+            echo "No KMP frameworks found. Build them first with Gradle (:common:linkReleaseFrameworkIosArm64 and/or :iosApp:linkReleaseFrameworkIosArm64)."
+          fi
+    entitlements: {}
