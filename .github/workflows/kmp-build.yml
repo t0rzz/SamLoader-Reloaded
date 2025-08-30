@@ -158,10 +158,11 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Run cinterop task with info (debug)
-        run: |
-          ./gradlew :common:cinteropCommoncryptoIosArm64 --no-daemon --info --stacktrace | tee cinterop-info.log || true
-          tail -n 300 cinterop-info.log || true
+      - name: Run CommonCrypto cinterop (debug)
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 8.7
+          arguments: :common:cinteropCommoncryptoIosArm64 --no-daemon --info --stacktrace
         env:
           SDKROOT: ${{ env.SDKROOT }}
 
@@ -187,7 +188,12 @@ jobs:
           brew install xcodegen || true
           (cd iosApp && xcodegen generate --spec xcodegen/project.yml)
       - name: Build KMP iOS frameworks (Release, device)
-        run: ./gradlew :common:linkReleaseFrameworkIosArm64 :iosApp:linkReleaseFrameworkIosArm64 --no-daemon --stacktrace
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 8.7
+          arguments: :common:linkReleaseFrameworkIosArm64 :iosApp:linkReleaseFrameworkIosArm64 --no-daemon --stacktrace
+        env:
+          SDKROOT: ${{ env.SDKROOT }}
       - name: Build iOS app with Xcode (unsigned IPA)
         run: |
           DERIVED="build/iosDerivedData"

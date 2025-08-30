@@ -1,3 +1,2 @@
-headers = <CommonCrypto/CommonCrypto.h>
+headers = CommonCrypto/CommonCrypto.h
 package = commoncrypto
-linkerOpts = -framework CommonCrypto
