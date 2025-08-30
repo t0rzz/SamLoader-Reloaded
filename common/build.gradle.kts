@@ -9,28 +9,42 @@ kotlin {
     iosX64()
     iosSimulatorArm64()
 
-    // Register CommonCrypto cinterop for all Kotlin/Native targets
+    // Register CommonCrypto cinterop for all Kotlin/Native iOS targets with per-target SDK selection
     targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget> {
-        compilations.getByName("main").cinterops {
-            val commoncrypto by creating {
-                defFile(project.file("src/nativeInterop/cinterop/ios/commoncrypto.def"))
-                val sdkRoot = System.getenv("SDKROOT")
-                if (!sdkRoot.isNullOrBlank()) {
-                    // Help cinterop find system headers when running in CI
-                    compilerOpts(
-                        "-isysroot", sdkRoot,
-                        "-I$sdkRoot/usr/include",
-                        "-F$sdkRoot/System/Library/Frameworks",
-                        "-framework", "CommonCrypto",
-                        "-fno-modules"
-                    )
-                    includeDirs(project.file("$sdkRoot/usr/include"))
+        // Only apply to iOS families
+        if (konanTarget.family.isAppleFamily) {
+            compilations.getByName("main").cinterops {
+                val commoncrypto by creating {
+                    defFile(project.file("src/nativeInterop/cinterop/ios/commoncrypto.def"))
+
+                    val isSimulator = (konanTarget.name == org.jetbrains.kotlin.konan.target.KonanTarget.IOS_X64.name) ||
+                            (konanTarget.name == org.jetbrains.kotlin.konan.target.KonanTarget.IOS_SIMULATOR_ARM64.name)
+                    val deviceSdk = System.getenv("SDKROOT")
+                    val simSdk = System.getenv("SIM_SDKROOT")
+                    val chosenSdk = when {
+                        isSimulator && !simSdk.isNullOrBlank() -> simSdk
+                        !isSimulator && !deviceSdk.isNullOrBlank() -> deviceSdk
+                        // fallback to device SDK if simulator SDK missing
+                        !deviceSdk.isNullOrBlank() -> deviceSdk
+                        else -> null
+                    }
+                    if (!chosenSdk.isNullOrBlank()) {
+                        // Configure include dirs and compiler opts pointing to the correct SDK
+                        includeDirs(project.file("$chosenSdk/usr/include"))
+                        compilerOpts(
+                            "-isysroot", chosenSdk,
+                            "-I$chosenSdk/usr/include",
+                            "-F$chosenSdk/System/Library/Frameworks",
+                            "-framework", "CommonCrypto",
+                            "-fno-modules"
+                        )
+                    }
                 }
             }
         }
     }
 
-    sourceSets {
+    sourceSets { 
         val commonMain by getting {
             dependencies {
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")

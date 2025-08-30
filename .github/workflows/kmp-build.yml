@@ -124,8 +124,11 @@ jobs:
           xcodebuild -version
           xcodebuild -showsdks
           SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)
+          SIM_SDKROOT=$(xcrun --sdk iphonesimulator --show-sdk-path)
           echo "SDKROOT=$SDKROOT"
+          echo "SIM_SDKROOT=$SIM_SDKROOT"
           echo "SDKROOT=$SDKROOT" >> $GITHUB_ENV
+          echo "SIM_SDKROOT=$SIM_SDKROOT" >> $GITHUB_ENV
 
       - name: Setup JDK 17
         uses: actions/setup-java@v4
@@ -144,27 +147,56 @@ jobs:
       - name: Quick SDK include debug (search CommonCrypto.h + clang include test)
         run: |
           SDKROOT=${SDKROOT:-$(xcrun --sdk iphoneos --show-sdk-path)}
-          echo "Using SDKROOT=$SDKROOT"
-          echo "Searching for CommonCrypto.h..."
+          SIM_SDKROOT=${SIM_SDKROOT:-$(xcrun --sdk iphonesimulator --show-sdk-path)}
+          echo "Using SDKROOT(device)=$SDKROOT"
+          echo "Using SIM_SDKROOT(sim)=$SIM_SDKROOT"
+          echo "Searching for CommonCrypto.h (device SDK)..."
           find "$SDKROOT" -name CommonCrypto.h -print 2>/dev/null || true
+          echo "Searching for CommonCrypto.h (simulator SDK)..."
+          find "$SIM_SDKROOT" -name CommonCrypto.h -print 2>/dev/null || true
           find /Applications -name CommonCrypto.h -maxdepth 6 -print 2>/dev/null || true
           echo "Listing $SDKROOT/usr/include (first 80 entries):"
           ls -la "$SDKROOT/usr/include" | head -n 80 || true
-          echo "clang include search paths:"
+          echo "Listing $SIM_SDKROOT/usr/include (first 80 entries):"
+          ls -la "$SIM_SDKROOT/usr/include" | head -n 80 || true
+          echo "clang include search paths (device):"
           clang -v -E -x c /dev/null -isysroot "$SDKROOT" 2>&1 | sed -n '/#include <...> search starts here:/,/#include <...> search ends here:/p'
-          echo "Running clang include test (this should succeed if CommonCrypto resolved):"
-          printf '' | clang -v -E -x c - -isysroot "$SDKROOT" -include CommonCrypto/CommonCrypto.h >/dev/null 2>&1 && echo "clang include test OK" || echo "clang include test FAILED"
+          echo "clang include search paths (simulator):"
+          clang -v -E -x c /dev/null -isysroot "$SIM_SDKROOT" 2>&1 | sed -n '/#include <...> search starts here:/,/#include <...> search ends here:/p'
+          echo "Running clang include test (device SDK):"
+          printf '' | clang -v -E -x c - -isysroot "$SDKROOT" -include CommonCrypto/CommonCrypto.h >/dev/null 2>&1 && echo "clang include test OK (device)" || echo "clang include test FAILED (device)"
+          echo "Running clang include test (simulator SDK):"
+          printf '' | clang -v -E -x c - -isysroot "$SIM_SDKROOT" -include CommonCrypto/CommonCrypto.h >/dev/null 2>&1 && echo "clang include test OK (simulator)" || echo "clang include test FAILED (simulator)"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Run CommonCrypto cinterop (debug)
+      - name: Run CommonCrypto cinterop (device iosArm64)
         uses: gradle/gradle-build-action@v2
         with:
           gradle-version: 8.7
           arguments: :common:cinteropCommoncryptoIosArm64 --no-daemon --info --stacktrace
         env:
           SDKROOT: ${{ env.SDKROOT }}
+          SIM_SDKROOT: ${{ env.SIM_SDKROOT }}
+
+      - name: Run CommonCrypto cinterop (simulator iosX64)
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 8.7
+          arguments: :common:cinteropCommoncryptoIosX64 --no-daemon --info --stacktrace
+        env:
+          SDKROOT: ${{ env.SDKROOT }}
+          SIM_SDKROOT: ${{ env.SIM_SDKROOT }}
+
+      - name: Run CommonCrypto cinterop (simulator iosSimulatorArm64)
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 8.7
+          arguments: :common:cinteropCommoncryptoIosSimulatorArm64 --no-daemon --info --stacktrace
+        env:
+          SDKROOT: ${{ env.SDKROOT }}
+          SIM_SDKROOT: ${{ env.SIM_SDKROOT }}
 
       - name: Build iOS frameworks (Gradle)
         uses: gradle/gradle-build-action@v2
@@ -173,6 +205,7 @@ jobs:
           arguments: :iosApp:build --no-daemon --info --stacktrace
         env:
           SDKROOT: ${{ env.SDKROOT }}
+          SIM_SDKROOT: ${{ env.SIM_SDKROOT }}
 
       - name: Package iOS frameworks
         run: |
@@ -186,7 +219,7 @@ jobs:
         run: |
           brew update
           brew install xcodegen || true
-          (cd iosApp && xcodegen generate --spec xcodegen/project.yml)
+          xcodegen generate --spec iosApp/xcodegen/project.yml --project iosApp/iosApp.xcodeproj
       - name: Build KMP iOS frameworks (Release, device)
         uses: gradle/gradle-build-action@v2
         with:
