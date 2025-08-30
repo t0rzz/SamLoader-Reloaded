@@ -17,6 +17,7 @@ kotlin {
                 implementation("androidx.compose.ui:ui-text")
                 implementation("androidx.activity:activity-compose:1.9.2")
                 implementation("io.ktor:ktor-client-okhttp:2.3.12")
+                implementation("org.slf4j:slf4j-android:1.7.36")
             }
         }
     }
