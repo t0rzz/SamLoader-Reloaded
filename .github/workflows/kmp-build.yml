@@ -115,7 +115,12 @@ jobs:
 
       - name: Check Xcode & SDK
         run: |
-          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer || true
+          # Prefer explicit Xcode_16.4 if available; fallback to generic Xcode.app
+          if [ -d "/Applications/Xcode_16.4.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          else
+            sudo xcode-select -s /Applications/Xcode.app/Contents/Developer || true
+          fi
           xcodebuild -version
           xcodebuild -showsdks
           SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)
@@ -143,12 +148,12 @@ jobs:
           echo "Searching for CommonCrypto.h..."
           find "$SDKROOT" -name CommonCrypto.h -print 2>/dev/null || true
           find /Applications -name CommonCrypto.h -maxdepth 6 -print 2>/dev/null || true
-          echo "Listing $SDKROOT/usr/include (if exists):"
-          ls -la "$SDKROOT/usr/include" || true
+          echo "Listing $SDKROOT/usr/include (first 80 entries):"
+          ls -la "$SDKROOT/usr/include" | head -n 80 || true
           echo "clang include search paths:"
           clang -v -E -x c /dev/null -isysroot "$SDKROOT" 2>&1 | sed -n '/#include <...> search starts here:/,/#include <...> search ends here:/p'
-          echo "Running clang preprocessor test (will FAIL if CommonCrypto.h unreachable):"
-          clang -v -E -x c - -isysroot "$SDKROOT" -include <CommonCrypto/CommonCrypto.h> </dev/null >/dev/null 2>&1 || echo "clang include test FAILED"
+          echo "Running clang include test (this should succeed if CommonCrypto resolved):"
+          printf '' | clang -v -E -x c - -isysroot "$SDKROOT" -include CommonCrypto/CommonCrypto.h >/dev/null 2>&1 && echo "clang include test OK" || echo "clang include test FAILED"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -162,17 +167,28 @@ jobs:
 
       - name: Build iOS frameworks (Gradle)
         run: |
-          # If cinterop passed, build the iOS frameworks / gradle iOS target
           ./gradlew :iosApp:build --no-daemon --info --stacktrace
         env:
           SDKROOT: ${{ env.SDKROOT }}
 
+      - name: Package iOS frameworks
+        run: |
+          mkdir -p ios-out || true
+          find iosApp/build/bin -type d -name "*Framework" -print0 | while IFS= read -r -d '' dir; do
+            base=$(basename "$dir")
+            zip -r "ios-out/${base}.zip" "$dir"
+          done || true
+
       - name: (Optional) Build iOS app with Xcode (unsigned IPA)
         if: always()
         run: |
-          # Only run this if you actually have an Xcode project in iosApp/
           if [ -d "iosApp/iosApp.xcodeproj" ]; then
-            sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+            # Use explicit Xcode selection if present
+            if [ -d "/Applications/Xcode_16.4.app" ]; then
+              sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+            else
+              sudo xcode-select -s /Applications/Xcode.app/Contents/Developer || true
+            fi
             SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)
             xcodebuild -scheme iosApp -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
             APP_PATH=$(find build -type d -name "*.app" -path "*Release-iphoneos*" | head -n1)
@@ -187,23 +203,26 @@ jobs:
           rm -rf Payload || true
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
-          zip -r ios-unsigned.ipa Payload
+          zip -r Duofrost-unsigned.ipa Payload
 
       - name: Upload IPA and frameworks (artifacts)
         uses: actions/upload-artifact@v4
         with:
           name: ios-artifacts
           path: |
-            ios-unsigned.ipa
-            iosApp/build/bin/**/Framework*.zip
+            Duofrost-unsigned.ipa
+            ios-out/*.zip
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+
       - name: Install samloader package
         run: |
           python -m pip install --upgrade pip
           pip install .
+
       - name: Get version (from Python package)
         id: getver
         run: |
@@ -211,10 +230,12 @@ jobs:
           import samloader; print(samloader.__version__)
           PY
           )" >> $GITHUB_OUTPUT
+
       - name: Compute tag name
         id: tagvars
         run: |
           echo "tag=v${{ steps.getver.outputs.ver }}" >> $GITHUB_OUTPUT
+
       - name: Check if tag exists (remote)
         id: checktag
         shell: bash
@@ -231,6 +252,7 @@ jobs:
               echo "exists=false" >> "$GITHUB_OUTPUT"
             fi
           fi
+
       - name: Create and push tag (if missing)
         if: steps.checktag.outputs.exists != 'true'
         run: |
@@ -238,6 +260,7 @@ jobs:
           git config user.email "github-actions@users.noreply.github.com"
           git tag -a "v${{ steps.getver.outputs.ver }}" -m "Release v${{ steps.getver.outputs.ver }}"
           git push https://x-access-token:${{ secrets.T0RZZ_TOKEN }}@github.com/${{ github.repository }}.git "refs/tags/v${{ steps.getver.outputs.ver }}"
+
       - name: Upload IPA to GitHub Release
         if: env.APP_PATH != ''
         uses: softprops/action-gh-release@v2
@@ -248,6 +271,7 @@ jobs:
             Duofrost-unsigned.ipa
         env:
           GITHUB_TOKEN: ${{ secrets.T0RZZ_TOKEN != '' && secrets.T0RZZ_TOKEN || secrets.GITHUB_TOKEN }}
+
       - name: Upload iOS frameworks to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
