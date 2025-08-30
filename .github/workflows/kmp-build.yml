@@ -166,8 +166,10 @@ jobs:
           SDKROOT: ${{ env.SDKROOT }}
 
       - name: Build iOS frameworks (Gradle)
-        run: |
-          ./gradlew :iosApp:build --no-daemon --info --stacktrace
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 8.7
+          arguments: :iosApp:build --no-daemon --info --stacktrace
         env:
           SDKROOT: ${{ env.SDKROOT }}
 
