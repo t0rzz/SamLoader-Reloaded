@@ -39,12 +39,11 @@ object VersionFetch {
                 install(Logging) {
                     logger = object : Logger {
                         override fun log(message: String) {
-                            // Keep logs at DEBUG: on Android they appear in Logcat via stdout; redact sensitive headers
+                            // Keep logs at DEBUG: on Android they appear in Logcat via stdout
                             println(message)
                         }
                     }
                     level = LogLevel.ALL
-                    redactHeaderNames = setOf("Authorization", "Cookie", "Set-Cookie")
                 }
             }
             install(HttpTimeout) {
