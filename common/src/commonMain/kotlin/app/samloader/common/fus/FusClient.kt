@@ -1,24 +1,41 @@
 package app.samloader.common.fus
 
+import app.samloader.common.logging.AppLogger // Crucial import
+import app.samloader.common.network.provideEngine
 import app.samloader.common.request.RequestBuilder
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.logging.LogLevel
+import io.ktor.client.plugins.logging.Logger
 import io.ktor.client.plugins.logging.Logging
+import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import app.samloader.common.network.provideEngine
 
 /** KMP FUS client (scaffold). */
 class FusClient {
+    // FIX 1: Provide the tag to the AppLogger constructor
+    private val appLogger = AppLogger("SamloaderFusHttp")
+
     data class BinaryInfo(val path: String, val filename: String, val size: Long)
 
     private val client = HttpClient(provideEngine()) {
-        install(Logging)
+        // Line 22, where the error is reported
+        install(Logging) {
+            logger = object : Logger { // Line 23 (approx.)
+                override fun log(message: String) {
+                    // FIX 2: Use the '.d()' method and pass only the message
+                    // The tag is now part of the appLogger instance.
+                    appLogger.d("SAMLOADER_FUS_HTTP_TRACE: $message")
+                }
+            }
+            level = LogLevel.ALL
+        }
         install(HttpTimeout) {
             requestTimeoutMillis = 5000
             connectTimeoutMillis = 5000
@@ -136,11 +153,22 @@ class FusClient {
 
     /** Download from cloud; supports optional byte range. */
     suspend fun downloadBinary(pathAndName: String, start: Long = 0L, endInclusive: Long? = null): FlowChunked {
-        val url = "http://cloud-neofussvr.samsungmobile.com/NF_DownloadBinaryForMass.do"
-        val resp: HttpResponse = client.get(url) {
-            parameter("file", pathAndName)
+        // Build the full URL with an unencoded file= query, to match Python behavior
+        val base = "http://cloud-neofussvr.samsungmobile.com/NF_DownloadBinaryForMass.do"
+        val fullUrl = "$base?file=$pathAndName"
+        // Trace outgoing request (without sensitive headers)
+        appLogger.d("SAMLOADER_FUS_HTTP_TRACE: REQUEST: $fullUrl\nMETHOD: GET")
+        val resp: HttpResponse = client.get(fullUrl) {
+            // Relax timeouts for large streaming downloads only (per-request override)
+            timeout {
+                requestTimeoutMillis = HttpTimeout.INFINITE_TIMEOUT_MS
+                connectTimeoutMillis = 15_000
+                socketTimeoutMillis = HttpTimeout.INFINITE_TIMEOUT_MS
+            }
+
             header("Authorization", fusAuthHeader(nonceEnc = serverNonceEncrypted, signature = authSignature))
             header("User-Agent", "Kies2.0_FUS")
+            header("Accept-Encoding", "identity")
             if (jsessionId.isNotEmpty()) header("Cookie", "JSESSIONID=$jsessionId")
             if (start > 0 || endInclusive != null) {
                 val range = if (endInclusive != null) "bytes=$start-$endInclusive" else "bytes=$start-"

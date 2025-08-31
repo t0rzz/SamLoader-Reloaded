@@ -9,6 +9,8 @@ import app.samloader.common.Api
 import app.samloader.common.version.VersionFetch
 import app.samloader.common.fus.FusClient
 import app.samloader.common.download.DownloadManager
+import app.samloader.common.prefs.AppPrefs
+import app.samloader.common.prefs.AppHistory
 
 @Composable
 fun AppIOS() {
@@ -22,17 +24,53 @@ private fun DuofrostIOSApp() {
     val tabs = listOf("Check Update", "Download", "Decrypt", "History", "Settings")
     var selectedTab by remember { mutableStateOf(0) }
 
+    // Shared UI state
+    var model by remember { mutableStateOf("") }
+    var region by remember { mutableStateOf("") }
+    var imei by remember { mutableStateOf("") }
+    var fw by remember { mutableStateOf("") }
+    var downloadedUrl by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+
     Scaffold(topBar = { TopAppBar(title = { Text(Api.appName()) }) }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             TabRow(selectedTabIndex = selectedTab) {
                 tabs.forEachIndexed { i, title ->
-                    Tab(selected = selectedTab == i, onClick = { selectedTab = i }, text = { Text(title) })
+                    Tab(selected = selectedTab == i, onClick = { if (!busy) selectedTab = i }, text = { Text(title) })
                 }
             }
             when (selectedTab) {
-                0 -> TabCheckUpdateIOS()
-                1 -> TabDownloadIOS()
-                2 -> TabDecryptIOS()
+                0 -> TabCheckUpdateIOS(
+                    model = model,
+                    region = region,
+                    imei = imei,
+                    onDeviceChanged = { m, r, i -> model = m; region = r; imei = i },
+                    onLatestFound = { fw = it },
+                    busy = busy,
+                    setBusy = { busy = it }
+                )
+                1 -> TabDownloadIOS(
+                    model = model,
+                    region = region,
+                    imei = imei,
+                    fw = fw,
+                    onDeviceChanged = { m, r, i -> model = m; region = r; imei = i },
+                    onFwChanged = { fw = it },
+                    onDownloadedUrl = { downloadedUrl = it },
+                    busy = busy,
+                    setBusy = { busy = it }
+                )
+                2 -> TabDecryptIOS(
+                    model = model,
+                    region = region,
+                    imei = imei,
+                    fw = fw,
+                    defaultInUrl = downloadedUrl,
+                    onDeviceChanged = { m, r, i -> model = m; region = r; imei = i },
+                    onFwChanged = { fw = it },
+                    busy = busy,
+                    setBusy = { busy = it }
+                )
                 3 -> TabHistoryIOS()
                 4 -> TabSettingsIOS()
             }
@@ -41,54 +79,71 @@ private fun DuofrostIOSApp() {
 }
 
 @Composable
-private fun DeviceInputsIOS(onChanged: (model: String, region: String, imei: String) -> Unit = { _,_,_ -> }) {
-    var model by remember { mutableStateOf("") }
-    var region by remember { mutableStateOf("") }
-    var imei by remember { mutableStateOf("") }
-
+private fun DeviceInputsIOS(
+    model: String,
+    region: String,
+    imei: String,
+    enabled: Boolean = true,
+    onChanged: (model: String, region: String, imei: String) -> Unit = { _,_,_ -> }
+) {
     Column(Modifier.fillMaxWidth().padding(12.dp)) {
-        OutlinedTextField(value = model, onValueChange = { model = it; onChanged(model, region, imei) }, label = { Text("Model") }, placeholder = { Text("e.g., SM-S918B") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = model, onValueChange = { onChanged(it, region, imei) }, label = { Text("Model") }, placeholder = { Text("e.g., SM-S918B") }, modifier = Modifier.fillMaxWidth(), enabled = enabled)
         Spacer(Modifier.height(8.dp))
-        OutlinedTextField(value = region, onValueChange = { region = it.uppercase(); onChanged(model, region, imei) }, label = { Text("Region (CSC)") }, placeholder = { Text("e.g., BTU/ITV/INS") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = region, onValueChange = { onChanged(model, it.uppercase(), imei) }, label = { Text("Region (CSC)") }, placeholder = { Text("e.g., BTU/ITV/INS") }, modifier = Modifier.fillMaxWidth(), enabled = enabled)
         Spacer(Modifier.height(8.dp))
-        OutlinedTextField(value = imei, onValueChange = { imei = it; onChanged(model, region, imei) }, label = { Text("IMEI prefix or serial") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = imei, onValueChange = { onChanged(model, region, it) }, label = { Text("IMEI prefix or serial") }, modifier = Modifier.fillMaxWidth(), enabled = enabled)
     }
 }
 
 @Composable
-private fun TabCheckUpdateIOS() {
+private fun TabCheckUpdateIOS(
+    model: String,
+    region: String,
+    imei: String,
+    onDeviceChanged: (String, String, String) -> Unit,
+    onLatestFound: (String) -> Unit,
+    busy: Boolean,
+    setBusy: (Boolean) -> Unit
+) {
     val scope = rememberCoroutineScope()
-    var latest by remember { mutableStateOf("-") }
-    var busy by remember { mutableStateOf(false) }
-    var model by remember { mutableStateOf("") }
-    var region by remember { mutableStateOf("") }
+    var latestDisplay by remember { mutableStateOf("-") }
 
     Column(Modifier.fillMaxSize()) {
-        DeviceInputsIOS { m, r, _ -> model = m; region = r }
+        DeviceInputsIOS(model = model, region = region, imei = imei, enabled = !busy, onChanged = onDeviceChanged)
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Button(onClick = {
-                if (model.isBlank() || region.isBlank()) { latest = "Missing model/region"; return@Button }
-                busy = true
+                if (model.isBlank() || region.isBlank()) { latestDisplay = "Missing model/region"; return@Button }
+                setBusy(true)
                 scope.launch {
                     runCatching { VersionFetch.getLatest(model, region) }
-                        .onSuccess { latest = it }
-                        .onFailure { latest = "Error: ${it.message ?: "failed"}" }
-                    busy = false
+                        .onSuccess { ver ->
+                            val norm = VersionFetch.normalize(ver)
+                            onLatestFound(norm)
+                            latestDisplay = "AP/CSC/CP/Build: $norm"
+                        }
+                        .onFailure { latestDisplay = "Error: ${it.message ?: "failed"}" }
+                    setBusy(false)
                 }
             }, enabled = !busy) { Text(if (busy) "Checking…" else "Check latest version") }
             Spacer(Modifier.width(16.dp))
-            Text("Latest: $latest")
+            Text("Latest: $latestDisplay")
         }
     }
 }
 
 @Composable
-private fun TabDownloadIOS() {
+private fun TabDownloadIOS(
+    model: String,
+    region: String,
+    imei: String,
+    fw: String,
+    onDeviceChanged: (String, String, String) -> Unit,
+    onFwChanged: (String) -> Unit,
+    onDownloadedUrl: (String) -> Unit,
+    busy: Boolean,
+    setBusy: (Boolean) -> Unit
+) {
     val scope = rememberCoroutineScope()
-    var model by remember { mutableStateOf("") }
-    var region by remember { mutableStateOf("") }
-    var imei by remember { mutableStateOf("") }
-    var fw by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("") }
 
     var folderUrl by remember { mutableStateOf("") }
@@ -134,6 +189,7 @@ private fun TabDownloadIOS() {
                             val outUrl = FileIOIOS.childUrl(folderUrl, fileName) ?: error("Invalid destination")
                             val out = FileIOIOS.openOutput(outUrl, append = false) ?: error("Cannot open output")
                             var done = 0L
+                            val startMs = platform.Foundation.NSDate().timeIntervalSince1970 * 1000.0
                             try {
                                 DownloadManager.download(
                                     fus,
@@ -150,6 +206,12 @@ private fun TabDownloadIOS() {
                                         done += delta
                                         val total = if (fileSize > 0) fileSize else 1L
                                         progress = (done.toDouble() / total.toDouble()).toFloat().coerceIn(0f, 1f)
+                                        val nowMs = platform.Foundation.NSDate().timeIntervalSince1970 * 1000.0
+                                        val elapsedSec = ((nowMs - startMs).coerceAtLeast(1.0)) / 1000.0
+                                        val bps = if (elapsedSec > 0.0) done.toDouble() / elapsedSec else null
+                                        val eta = if (bps != null && bps > 0.0) (((total - done).toDouble() / bps)).toLong() else null
+                                        val line = app.samloader.common.util.Format.compositeProgress(done, total, bps, eta, 1)
+                                        status = "$fileName — $line"
                                     }
                                 )
                                 status = "Completed: $fileName"
@@ -169,7 +231,17 @@ private fun TabDownloadIOS() {
 }
 
 @Composable
-private fun TabDecryptIOS() {
+private fun TabDecryptIOS(
+    model: String,
+    region: String,
+    imei: String,
+    fw: String,
+    defaultInUrl: String,
+    onDeviceChanged: (String, String, String) -> Unit,
+    onFwChanged: (String) -> Unit,
+    busy: Boolean,
+    setBusy: (Boolean) -> Unit
+) {
     val scope = rememberCoroutineScope()
     var model by remember { mutableStateOf("") }
     var region by remember { mutableStateOf("") }
@@ -253,11 +325,22 @@ private fun TabDecryptIOS() {
 @Composable
 private fun TabHistoryIOS() {
     var items by remember { mutableStateOf(listOf<String>()) }
+    LaunchedEffect(Unit) {
+        items = AppHistory.getAll()
+    }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Button(onClick = { if (items.isNotEmpty()) items = items.drop(1) }) { Text("Delete Selected (top)") }
+            Button(onClick = {
+                if (items.isNotEmpty()) {
+                    AppHistory.removeFirst()
+                    items = AppHistory.getAll()
+                }
+            }) { Text("Delete Selected (top)") }
             Spacer(Modifier.width(8.dp))
-            Button(onClick = { items = emptyList() }) { Text("Clear All") }
+            Button(onClick = {
+                AppHistory.clear()
+                items = emptyList()
+            }) { Text("Clear All") }
         }
         LazyColumn(Modifier.fillMaxSize()) {
             items(items.size) { idx ->
@@ -272,6 +355,10 @@ private fun TabHistoryIOS() {
 private fun TabSettingsIOS() {
     var defThreads by remember { mutableStateOf(1) }
     var autoDec by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        defThreads = AppPrefs.getDefaultThreads()
+        autoDec = AppPrefs.getAutoDecrypt()
+    }
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Default threads")
@@ -284,7 +371,7 @@ private fun TabSettingsIOS() {
             Text("Auto-decrypt by default")
         }
         Spacer(Modifier.height(8.dp))
-        Button(onClick = { /* TODO persist via NSUserDefaults */ }) { Text("Save Settings") }
+        Button(onClick = { AppPrefs.setDefaultThreads(defThreads); AppPrefs.setAutoDecrypt(autoDec) }) { Text("Save Settings") }
     }
 }
 
