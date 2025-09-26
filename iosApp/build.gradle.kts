@@ -5,6 +5,8 @@ plugins {
 }
 
 kotlin {
+    // Always declare iOS targets to satisfy KMP requirement of at least one target.
+    // Building these targets still requires macOS; on other hosts they won't be executed by default.
     iosArm64()
     iosX64()
     iosSimulatorArm64()

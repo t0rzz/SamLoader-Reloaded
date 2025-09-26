@@ -12,6 +12,8 @@ import app.samloader.common.download.DownloadManager
 import app.samloader.common.fus.FusClient
 import app.samloader.common.version.VersionFetch
 import kotlinx.coroutines.launch
+import app.samloader.common.util.Format
+import kotlin.math.roundToLong
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -127,6 +129,7 @@ private fun TabDownloadDesktop() {
                         val size = info.size.coerceAtLeast(1L)
                         stats = "${info.filename} — ${String.format("%.2f", size / (1024.0 * 1024.0))} MiB (server)"
                         val fos = FileOutputStream(dest)
+                        val startMs = System.currentTimeMillis()
                         var done = 0L
                         DownloadManager.download(
                             fus,
@@ -137,7 +140,11 @@ private fun TabDownloadDesktop() {
                             onProgress = { delta ->
                                 done += delta
                                 progress = (done.toDouble() / size.toDouble()).toFloat().coerceIn(0f, 1f)
-                                stats = String.format("%s — %.2f%%", info.filename, progress * 100f)
+                                val elapsedSec = ((System.currentTimeMillis() - startMs).coerceAtLeast(1)).toDouble() / 1000.0
+                                val bps = if (elapsedSec > 0) done.toDouble() / elapsedSec else null
+                                val eta = if (bps != null && bps > 0.0) ((size - done).toDouble() / bps).roundToLong() else null
+                                val line = Format.compositeProgress(done, size, bps, eta, 1)
+                                stats = "${info.filename} — $line"
                             }
                         )
                         fos.flush(); fos.close()

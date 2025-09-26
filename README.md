@@ -162,7 +162,7 @@ This project was originally created at `nlscc/samloader`, later moved to `samloa
 ---
 
 ## Kotlin Multiplatform Migration (in progress)
-SamLoader Reloaded is being migrated to a Kotlin Multiplatform (KMP) codebase named Duofrost, targeting Desktop (Windows/macOS/Linux), Android, and iOS.
+SamLoader Reloaded is being migrated to a Kotlin Multiplatform (KMP) codebase named Duofrost, targeting Desktop (Windows/macOS/Linux), Android, iOS, and Kotlin/Native Linux (linuxX64) and Windows (mingwX64) for the shared library.
 
 Project layout (new):
 - common: shared logic (networking, FUS requests, auth, version fetch, crypt, TAC DB, regions, download manager)
@@ -180,9 +180,11 @@ Local build examples:
 - Desktop (JVM): ./gradlew :desktop:build
 - Android (debug APK): ./gradlew :android:assembleDebug
 - iOS (frameworks): ./gradlew :iosApp:build
+- Linux native (shared lib): ./gradlew :common:compileKotlinLinuxX64
+- Windows native (shared lib): ./gradlew :common:compileKotlinMingwX64
 
 Notes:
-- Existing Python CLI/GUI remains temporarily as a reference and will be removed after KMP feature parity.
+- Existing Python CLI/GUI remains temporary as a reference and will be removed after KMP feature parity.
 - KMP artifacts are unsigned; users can sign/distribute as needed (Android/iOS).
 
 

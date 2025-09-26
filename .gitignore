@@ -1,2 +1,54 @@
-__pycache__
-samloader.egg-info
+# Gradle
+.gradle/
+**/build/
+!gradle/wrapper/
+!gradle/wrapper/**
+
+# Android
+/local.properties
+.cxx/
+**/.cxx/
+/captures/
+*.keystore
+*.jks
+
+# Kotlin/IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+.kotlinc/
+
+# OS junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Logs, dumps
+*.log
+*.hprof
+hs_err_pid*
+replay_pid*
+
+# Xcode (project is generated via xcodegen)
+**/DerivedData/
+iosApp/iosApp.xcodeproj/
+iosApp/iosApp.xcworkspace/
+**/xcuserdata/
+**/*.xcuserstate
+
+# Node/yarn (if any tooling appears)
+node_modules/
+
+# Python build (keep sources and setup.py)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.build/
+.eggs/
+*.egg-info/
+
+# Misc
+/.gradletasknamecache
