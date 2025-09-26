@@ -1,17 +1,9 @@
 name: KMP CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [ "master" ]
-    paths:
-      - 'common/**'
-      - 'desktop/**'
-      - 'android/**'
-      - 'iosApp/**'
-      - 'build.gradle.kts'
-      - 'settings.gradle.kts'
-      - 'gradle.properties'
-      - '.github/workflows/kmp-build.yml'
   pull_request:
     branches: [ "master" ]
 

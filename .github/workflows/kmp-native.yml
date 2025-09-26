@@ -1,15 +1,9 @@
 name: KMP Native Builds
 
 on:
+  workflow_dispatch:
   push:
     branches: [ "master" ]
-    paths:
-      - 'common/**'
-      - 'desktop/**'
-      - 'build.gradle.kts'
-      - 'settings.gradle.kts'
-      - 'gradle.properties'
-      - '.github/workflows/kmp-native.yml'
   pull_request:
     branches: [ "master" ]
 
