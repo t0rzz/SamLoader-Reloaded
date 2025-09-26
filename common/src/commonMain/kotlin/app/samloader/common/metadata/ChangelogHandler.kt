@@ -59,7 +59,8 @@ object ChangelogHandler {
         val doc = try { Ksoup.parse(body) } catch (_: Throwable) { return emptyMap() }
         val container = doc.selectFirst(".container") ?: return emptyMap()
         val divs = container.children().toMutableList()
-        divs.removeIf { it.tagName() == "hr" }
+        // Use Kotlin Multiplatform-friendly API (removeAll with predicate) instead of Java's removeIf
+        divs.removeAll { it.tagName() == "hr" }
         val out = LinkedHashMap<String, Changelog>()
         var i = 3
         while (i < divs.size) {
