@@ -62,7 +62,7 @@ kotlin {
                 implementation("io.ktor:ktor-utils:2.3.12")
                 implementation("com.soywiz.korlibs.krypto:krypto:4.0.10")
                 implementation("com.fleeksoft.ksoup:ksoup:0.2.5")
-                implementation("com.russhwolf:multiplatform-settings-no-arg:1.1.1")
+                implementation("com.russhwolf:multiplatform-settings:1.1.1")
             }
         }
         val commonTest by getting {
