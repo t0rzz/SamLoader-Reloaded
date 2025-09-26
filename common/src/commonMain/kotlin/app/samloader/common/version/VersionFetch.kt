@@ -57,7 +57,8 @@ object VersionFetch {
     suspend fun getLatest(model: String, region: String): String {
         val client = HttpClient(provideEngine()) {
             install(ContentNegotiation) {
-                Json { ignoreUnknownKeys = true }
+                // Register Kotlinx Serialization JSON converter
+                json(Json { ignoreUnknownKeys = true })
             }
             install(Logging) {
                 logger = object : Logger {
