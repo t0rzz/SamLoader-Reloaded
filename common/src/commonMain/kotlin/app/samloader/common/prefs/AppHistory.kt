@@ -7,7 +7,7 @@ import com.russhwolf.settings.Settings
  * Items are stored as a newline-separated list under a single key.
  */
 object AppHistory {
-    private val settings: Settings by lazy { Settings() }
+    private val settings: Settings = Settings()
 
     private const val KEY = "history.items"
     private const val MAX_ITEMS = 200
