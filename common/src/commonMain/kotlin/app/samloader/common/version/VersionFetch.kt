@@ -12,6 +12,7 @@ import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import app.samloader.common.network.provideEngine
+import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
 object VersionFetch {
