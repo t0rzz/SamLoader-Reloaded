@@ -61,7 +61,6 @@ kotlin {
                 implementation("io.ktor:ktor-client-logging:2.3.12")
                 implementation("io.ktor:ktor-utils:2.3.12")
                 implementation("com.soywiz.korlibs.krypto:krypto:4.0.10")
-                implementation("com.fleeksoft.ksoup:ksoup:0.2.4")
                 implementation("com.russhwolf:multiplatform-settings:1.1.1")
             }
         }
@@ -73,6 +72,7 @@ kotlin {
         val jvmMain by getting {
             dependencies {
                 implementation("io.ktor:ktor-client-cio:2.3.12")
+                implementation("com.fleeksoft.ksoup:ksoup:0.2.4")
             }
         }
         val jvmTest by getting {
