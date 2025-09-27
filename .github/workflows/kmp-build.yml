@@ -2,8 +2,6 @@ name: KMP CI
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
 
@@ -83,22 +81,23 @@ jobs:
               echo "exists=false" >> "$GITHUB_OUTPUT"
             fi
           fi
-      - name: Create and push tag (if missing)
-        if: steps.checktag.outputs.exists != 'true'
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@users.noreply.github.com"
-          git tag -a "v${{ steps.getver.outputs.ver }}" -m "Release v${{ steps.getver.outputs.ver }}"
-          git push https://x-access-token:${{ secrets.T0RZZ_TOKEN }}@github.com/${{ github.repository }}.git "refs/tags/v${{ steps.getver.outputs.ver }}"
-      - name: Upload APK to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.tagvars.outputs.tag }}
-          append_body: true
-          files: |
-            android/build/outputs/apk/debug/*.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.T0RZZ_TOKEN != '' && secrets.T0RZZ_TOKEN || secrets.GITHUB_TOKEN }}
+      # Tag creation and Release upload moved to unified release workflow
+      # - name: Create and push tag (if missing)
+      #   if: steps.checktag.outputs.exists != 'true'
+      #   run: |
+      #     git config user.name "github-actions"
+      #     git config user.email "github-actions@users.noreply.github.com"
+      #     git tag -a "v${{ steps.getver.outputs.ver }}" -m "Release v${{ steps.getver.outputs.ver }}"
+      #     git push https://x-access-token:${{ secrets.T0RZZ_TOKEN }}@github.com/${{ github.repository }}.git "refs/tags/v${{ steps.getver.outputs.ver }}"
+      # - name: Upload APK to GitHub Release
+      #   uses: softprops/action-gh-release@v2
+      #   with:
+      #     tag_name: ${{ steps.tagvars.outputs.tag }}
+      #     append_body: true
+      #     files: |
+      #       android/build/outputs/apk/debug/*.apk
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.T0RZZ_TOKEN != '' && secrets.T0RZZ_TOKEN || secrets.GITHUB_TOKEN }}
 
   build-ios:
     runs-on: macos-latest
@@ -283,31 +282,33 @@ jobs:
             fi
           fi
 
-      - name: Create and push tag (if missing)
-        if: steps.checktag.outputs.exists != 'true'
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@users.noreply.github.com"
-          git tag -a "v${{ steps.getver.outputs.ver }}" -m "Release v${{ steps.getver.outputs.ver }}"
-          git push https://x-access-token:${{ secrets.T0RZZ_TOKEN }}@github.com/${{ github.repository }}.git "refs/tags/v${{ steps.getver.outputs.ver }}"
+      # Tag creation handled by unified release workflow; disabled here to avoid conflicts
+      # - name: Create and push tag (if missing)
+      #   if: steps.checktag.outputs.exists != 'true'
+      #   run: |
+      #     git config user.name "github-actions"
+      #     git config user.email "github-actions@users.noreply.github.com"
+      #     git tag -a "v${{ steps.getver.outputs.ver }}" -m "Release v${{ steps.getver.outputs.ver }}"
+      #     git push https://x-access-token:${{ secrets.T0RZZ_TOKEN }}@github.com/${{ github.repository }}.git "refs/tags/v${{ steps.getver.outputs.ver }}"
 
-      - name: Upload IPA to GitHub Release
-        if: env.APP_PATH != ''
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.tagvars.outputs.tag }}
-          append_body: true
-          files: |
-            Duofrost-unsigned.ipa
-        env:
-          GITHUB_TOKEN: ${{ secrets.T0RZZ_TOKEN != '' && secrets.T0RZZ_TOKEN || secrets.GITHUB_TOKEN }}
+      # Release publishing moved to unified release workflow
+      # - name: Upload IPA to GitHub Release
+      #   if: env.APP_PATH != ''
+      #   uses: softprops/action-gh-release@v2
+      #   with:
+      #     tag_name: ${{ steps.tagvars.outputs.tag }}
+      #     append_body: true
+      #     files: |
+      #       Duofrost-unsigned.ipa
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.T0RZZ_TOKEN != '' && secrets.T0RZZ_TOKEN || secrets.GITHUB_TOKEN }}
 
-      - name: Upload iOS frameworks to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.tagvars.outputs.tag }}
-          append_body: true
-          files: |
-            ios-out/*.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.T0RZZ_TOKEN != '' && secrets.T0RZZ_TOKEN || secrets.GITHUB_TOKEN }}
+      # - name: Upload iOS frameworks to GitHub Release
+      #   uses: softprops/action-gh-release@v2
+      #   with:
+      #     tag_name: ${{ steps.tagvars.outputs.tag }}
+      #     append_body: true
+      #     files: |
+      #       ios-out/*.zip
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.T0RZZ_TOKEN != '' && secrets.T0RZZ_TOKEN || secrets.GITHUB_TOKEN }}
