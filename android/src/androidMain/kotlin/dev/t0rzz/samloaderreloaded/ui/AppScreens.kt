@@ -34,6 +34,12 @@ import app.samloader.common.prefs.AppHistory
 import kotlinx.coroutines.launch
 import app.samloader.common.util.Format
 import kotlin.math.roundToLong
+// Compose Material icons (extension properties) imports
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.VpnKey
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.MoreHoriz
 
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
@@ -61,10 +67,10 @@ fun DuofrostApp() {
                     onClick = { if (!busy) selectedTab = i },
                     icon = {
                         val icon = when (i) {
-                            0 -> androidx.compose.material.icons.Icons.Filled.Download
-                            1 -> androidx.compose.material.icons.Icons.Filled.VpnKey
-                            2 -> androidx.compose.material.icons.Icons.Filled.History
-                            else -> androidx.compose.material.icons.Icons.Filled.MoreHoriz
+                            0 -> Icons.Filled.Download
+                            1 -> Icons.Filled.VpnKey
+                            2 -> Icons.Filled.History
+                            else -> Icons.Filled.MoreHoriz
                         }
                         Icon(icon, contentDescription = null)
                     },
