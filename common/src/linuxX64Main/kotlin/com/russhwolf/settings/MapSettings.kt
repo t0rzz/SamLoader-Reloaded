@@ -34,7 +34,8 @@ class MapSettings : Settings {
     override fun clear() { data.clear() }
 
     // Optional APIs not used by our codebase but part of the interface
-    override fun keys(): Set<String> = data.keys
+    override val keys: Set<String>
+        get() = data.keys
 
     override fun getStringOrNull(key: String): String? = data[key]
     override fun getIntOrNull(key: String): Int? = data[key]?.toIntOrNull()
@@ -45,9 +46,5 @@ class MapSettings : Settings {
         "true" -> true
         "false" -> false
         else -> null
-    }
-
-    override fun putStringOrNull(key: String, value: String?) {
-        if (value == null) data.remove(key) else data[key] = value
     }
 }

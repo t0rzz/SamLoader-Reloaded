@@ -1,7 +1,6 @@
 package app.samloader.common.prefs
 
-import com.russhwolf.settings.AppleSettings
+import com.russhwolf.settings.MapSettings
 import com.russhwolf.settings.Settings
-import platform.Foundation.NSUserDefaults
 
-actual fun provideSettings(): Settings = AppleSettings(NSUserDefaults.standardUserDefaults())
+actual fun provideSettings(): Settings = MapSettings()

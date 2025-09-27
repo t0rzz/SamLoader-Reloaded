@@ -1,7 +1,7 @@
 package com.russhwolf.settings
 
 /**
- * Minimal in-memory Settings implementation for Kotlin/Native mingwX64.
+ * Minimal in-memory Settings implementation for Kotlin/Native iOS.
  */
 class MapSettings : Settings {
     private val data: MutableMap<String, String> = mutableMapOf()
