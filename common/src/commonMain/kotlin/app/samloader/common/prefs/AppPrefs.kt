@@ -3,7 +3,7 @@ package app.samloader.common.prefs
 import com.russhwolf.settings.Settings
 
 object AppPrefs {
-    private val settings: Settings = Settings()
+    private val settings: Settings = provideSettings()
 
     private const val KEY_THREADS = "prefs.default_threads"
     private const val KEY_AUTO_DEC = "prefs.auto_decrypt"
