@@ -32,6 +32,9 @@ class MapSettings : Settings {
     override fun hasKey(key: String): Boolean = data.containsKey(key)
     override fun clear() { data.clear() }
 
+    override val size: Int
+        get() = data.size
+
     override val keys: Set<String>
         get() = data.keys
 
