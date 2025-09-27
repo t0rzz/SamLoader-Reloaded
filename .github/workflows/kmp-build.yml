@@ -57,10 +57,7 @@ jobs:
       - name: Get version (from Python package)
         id: getver
         run: |
-          echo "ver=$(python - << 'PY'
-          import samloader; print(samloader.__version__)
-          PY
-          )" >> $GITHUB_OUTPUT
+          echo "ver=$(python -c 'import samloader; print(samloader.__version__)')" >> $GITHUB_OUTPUT
       - name: Compute tag name
         id: tagvars
         run: |
@@ -255,10 +252,7 @@ jobs:
       - name: Get version (from Python package)
         id: getver
         run: |
-          echo "ver=$(python - << 'PY'
-          import samloader; print(samloader.__version__)
-          PY
-          )" >> $GITHUB_OUTPUT
+          echo "ver=$(python -c 'import samloader; print(samloader.__version__)')" >> $GITHUB_OUTPUT
 
       - name: Compute tag name
         id: tagvars

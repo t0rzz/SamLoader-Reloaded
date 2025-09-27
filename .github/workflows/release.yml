@@ -267,7 +267,7 @@ jobs:
       - name: Get version
         id: getver
         run: |
-          echo "ver=$(python - << 'PY'\nimport samloader; print(samloader.__version__)\nPY\n)" >> $GITHUB_OUTPUT
+          echo "ver=$(python -c 'import samloader; print(samloader.__version__)')" >> $GITHUB_OUTPUT
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
