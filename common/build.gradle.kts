@@ -63,6 +63,8 @@ kotlin {
                 implementation("com.soywiz.korlibs.krypto:krypto:4.0.10")
                 implementation("com.fleeksoft.ksoup:ksoup:0.2.4")
                 implementation("com.russhwolf:multiplatform-settings:1.1.1")
+                // Provide no-arg factory Settings() across targets
+                implementation("com.russhwolf:multiplatform-settings-no-arg:1.1.1")
             }
         }
         val commonTest by getting {
