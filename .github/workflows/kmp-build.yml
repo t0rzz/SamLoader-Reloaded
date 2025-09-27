@@ -211,7 +211,8 @@ jobs:
         run: |
           brew update
           brew install xcodegen || true
-          xcodegen generate --spec iosApp/xcodegen/project.yml --project iosApp/iosApp.xcodeproj
+          # Generate into the iosApp directory; XcodeGen will create iosApp.xcodeproj inside it
+          xcodegen generate --spec iosApp/xcodegen/project.yml --project iosApp
       - name: Build KMP iOS frameworks (Release, device)
         uses: gradle/gradle-build-action@v2
         with:
