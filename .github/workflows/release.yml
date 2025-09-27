@@ -1,0 +1,292 @@
+name: Release (auto)
+
+on:
+  push:
+    branches: [ "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-windows:
+    name: Build Windows (PyInstaller GUI/CLI + wheel)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+          cache-dependency-path: |
+            setup.py
+      - name: Install build deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install . pyinstaller build wheel
+      - name: Build GUI exe
+        run: |
+          pyinstaller --noconfirm --onefile --windowed -n samloader-gui --collect-data certifi --collect-all PyQt6 --add-data "samloader\data\regions.json;samloader\data" samloader\gui.py
+      - name: Build CLI exe
+        run: |
+          pyinstaller --noconfirm --onefile --console -n samloader-cli samloader\__main__.py
+      - name: Build sdist/wheel
+        run: |
+          python -m build --sdist --wheel
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-artifacts
+          path: |
+            dist/samloader-gui.exe
+            dist/samloader-cli.exe
+            dist/*.whl
+            dist/*.tar.gz
+
+  build-linux:
+    name: Build Linux (PyInstaller GUI/CLI)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+          cache-dependency-path: |
+            setup.py
+      - name: Install build deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install . pyinstaller
+      - name: Build GUI (Linux)
+        run: |
+          pyinstaller --noconfirm --onefile --windowed -n samloader-gui --collect-data certifi --collect-all PyQt6 --add-data "samloader/data/regions.json:samloader/data" samloader/gui.py
+      - name: Build CLI (Linux)
+        run: |
+          pyinstaller --noconfirm --onefile --console -n samloader-cli samloader/__main__.py
+      - name: Rename Linux artifacts
+        run: |
+          mv dist/samloader-gui dist/samloader-gui-linux
+          mv dist/samloader-cli dist/samloader-cli-linux
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-artifacts
+          path: |
+            dist/samloader-gui-linux
+            dist/samloader-cli-linux
+
+  build-macos:
+    name: Build macOS (PyInstaller GUI/CLI)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+          cache-dependency-path: |
+            setup.py
+      - name: Install build deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install . pyinstaller
+      - name: Build GUI (macOS)
+        run: |
+          pyinstaller --noconfirm --onefile --windowed -n samloader-gui --collect-data certifi --collect-all PyQt6 --add-data "samloader/data/regions.json:samloader/data" samloader/gui.py
+      - name: Build CLI (macOS)
+        run: |
+          pyinstaller --noconfirm --onefile --console -n samloader-cli samloader/__main__.py
+      - name: Rename macOS artifacts
+        run: |
+          mv dist/samloader-gui dist/samloader-gui-macos
+          mv dist/samloader-cli dist/samloader-cli-macos
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-artifacts
+          path: |
+            dist/samloader-gui-macos
+            dist/samloader-cli-macos
+
+  build-android:
+    name: Build Android (debug APK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+      - name: Build Android APK (debug)
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: wrapper
+          arguments: :android:assembleDebug --stacktrace --no-daemon
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: android/build/outputs/apk/debug/*.apk
+
+  build-ios:
+    name: Build iOS (frameworks + unsigned IPA)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Xcode & SDK
+        run: |
+          if [ -d "/Applications/Xcode_16.4.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          else
+            sudo xcode-select -s /Applications/Xcode.app/Contents/Developer || true
+          fi
+          xcodebuild -version
+          xcodebuild -showsdks
+          SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)
+          SIM_SDKROOT=$(xcrun --sdk iphonesimulator --show-sdk-path)
+          echo "SDKROOT=$SDKROOT" >> $GITHUB_ENV
+          echo "SIM_SDKROOT=$SIM_SDKROOT" >> $GITHUB_ENV
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Prepare environment (clean konan caches)
+        run: |
+          rm -rf /Users/runner/.konan/dependencies || true
+          rm -rf /Users/runner/.konan/kotlinc || true
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: CommonCrypto cinterop (device iosArm64)
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: wrapper
+          arguments: :common:cinteropCommoncryptoIosArm64 --no-daemon --info --stacktrace -PenableIos=true
+        env:
+          SDKROOT: ${{ env.SDKROOT }}
+          SIM_SDKROOT: ${{ env.SIM_SDKROOT }}
+
+      - name: CommonCrypto cinterop (sim x64)
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: wrapper
+          arguments: :common:cinteropCommoncryptoIosX64 --no-daemon --info --stacktrace -PenableIos=true
+        env:
+          SDKROOT: ${{ env.SDKROOT }}
+          SIM_SDKROOT: ${{ env.SIM_SDKROOT }}
+
+      - name: CommonCrypto cinterop (sim arm64)
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: wrapper
+          arguments: :common:cinteropCommoncryptoIosSimulatorArm64 --no-daemon --info --stacktrace -PenableIos=true
+        env:
+          SDKROOT: ${{ env.SDKROOT }}
+          SIM_SDKROOT: ${{ env.SIM_SDKROOT }}
+
+      - name: Build iOS frameworks (Gradle)
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: wrapper
+          arguments: :iosApp:build --no-daemon --info --stacktrace -PenableIos=true
+        env:
+          SDKROOT: ${{ env.SDKROOT }}
+          SIM_SDKROOT: ${{ env.SIM_SDKROOT }}
+
+      - name: Package iOS frameworks
+        run: |
+          mkdir -p ios-out || true
+          find iosApp/build/bin -type d -name "*Framework" -print0 | while IFS= read -r -d '' dir; do
+            base=$(basename "$dir")
+            zip -r "ios-out/${base}.zip" "$dir"
+          done || true
+
+      - name: Generate Xcode project (XcodeGen)
+        run: |
+          brew update
+          brew install xcodegen || true
+          xcodegen generate --spec iosApp/xcodegen/project.yml --project iosApp
+
+      - name: Build iOS app with Xcode (unsigned IPA)
+        run: |
+          DERIVED="build/iosDerivedData"
+          xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -sdk iphoneos -configuration Release -derivedDataPath "$DERIVED" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
+          APP_PATH="$DERIVED/Build/Products/Release-iphoneos/Duofrost.app"
+          echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
+
+      - name: Package IPA (unsigned)
+        if: env.APP_PATH != ''
+        run: |
+          rm -rf Payload || true
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -r Duofrost-unsigned.ipa Payload
+
+      - name: Upload iOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-artifacts
+          path: |
+            Duofrost-unsigned.ipa
+            ios-out/*.zip
+
+  publish:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-windows, build-linux, build-macos, build-android, build-ios]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install samloader package (for version)
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+      - name: Get version
+        id: getver
+        run: |
+          echo "ver=$(python - << 'PY'\nimport samloader; print(samloader.__version__)\nPY\n)" >> $GITHUB_OUTPUT
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*'
+          path: release-assets
+          merge-multiple: true
+      - name: List assets to upload
+        run: |
+          echo "Will upload the following files:" 
+          ls -la release-assets || true
+      - name: Create/Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.getver.outputs.ver }}
+          target_commitish: ${{ github.sha }}
+          name: "SamLoader ${{ steps.getver.outputs.ver }}"
+          make_latest: true
+          generate_release_notes: true
+          files: |
+            release-assets/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.T0RZZ_TOKEN != '' && secrets.T0RZZ_TOKEN || secrets.GITHUB_TOKEN }}
