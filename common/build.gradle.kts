@@ -84,11 +84,13 @@ kotlin {
         val linuxX64Main by getting {
             dependencies {
                 implementation("io.ktor:ktor-client-curl:2.3.12")
+                implementation("com.russhwolf:multiplatform-settings:1.1.1")
             }
         }
         val mingwX64Main by getting {
             dependencies {
                 implementation("io.ktor:ktor-client-winhttp:2.3.12")
+                implementation("com.russhwolf:multiplatform-settings:1.1.1")
             }
         }
         // Removed androidMain to avoid AGP requirement in :common
