@@ -63,4 +63,3 @@ targets:
           if [ "$COPIED" -eq 0 ]; then
             echo "No KMP frameworks found. Build them first with Gradle (:common:linkReleaseFrameworkIosArm64 and/or :iosApp:linkReleaseFrameworkIosArm64)."
           fi
-    entitlements: {}
