@@ -19,6 +19,10 @@ kotlin {
         targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget> {
             // Only apply to iOS families
             if (konanTarget.family.isAppleFamily) {
+                // Ensure a Framework binary is produced so link*Framework* tasks exist
+                binaries.framework {
+                    baseName = "DuofrostCommon"
+                }
                 compilations.getByName("main").cinterops {
                     val commoncrypto by creating {
                         defFile(project.file("src/nativeInterop/cinterop/ios/commoncrypto.def"))

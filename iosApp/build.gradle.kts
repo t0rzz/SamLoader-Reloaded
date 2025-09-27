@@ -11,6 +11,15 @@ kotlin {
     iosX64()
     iosSimulatorArm64()
 
+    // Ensure iOS Native targets produce Framework binaries so link*Framework* tasks exist
+    targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget> {
+        if (konanTarget.family.isAppleFamily) {
+            binaries.framework {
+                baseName = "Duofrost"
+            }
+        }
+    }
+
     sourceSets {
         val commonMain by getting {
             dependencies {
