@@ -23,7 +23,7 @@ targets:
     sources:
       - path: Sources
     info:
-      path: Info.plist
+      path: xcodegen/Info.plist
       properties:
         CFBundleIdentifier: dev.t0rzz.duofrost
         CFBundleName: Duofrost
@@ -36,7 +36,7 @@ targets:
         UIRequiresFullScreen: true
     settings:
       base:
-        INFOPLIST_FILE: Info.plist
+        INFOPLIST_FILE: xcodegen/Info.plist
         PRODUCT_NAME: Duofrost
         IPHONEOS_DEPLOYMENT_TARGET: 14.0
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
