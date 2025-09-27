@@ -1,3 +1,4 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
 package app.samloader.common.crypto
 
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -6,11 +7,10 @@ import kotlinx.cinterop.alloc
 import kotlinx.cinterop.convert
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
-import kotlinx.cinterop.ULongVar
 import kotlinx.cinterop.usePinned
+import platform.posix.size_tVar
 import commoncrypto.*
 
-@OptIn(ExperimentalForeignApi::class)
 private fun ccCrypt(
     operation: CCOperation,
     options: CCOptions,
@@ -23,7 +23,7 @@ private fun ccCrypt(
     val out = ByteArray(outCapacity)
 
     var statusCode = -1
-    val outLenVar = alloc<ULongVar>()
+    val outLenVar = alloc<size_tVar>()
 
     input.usePinned { inPinned ->
         key.usePinned { keyPinned ->

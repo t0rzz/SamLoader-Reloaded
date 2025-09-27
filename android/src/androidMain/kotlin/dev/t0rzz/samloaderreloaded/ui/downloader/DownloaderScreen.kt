@@ -86,7 +86,7 @@ fun DownloaderScreen(
                     placeholder = { Text("TMB") },
                     trailingIcon = {
                         Icon(
-                            imageVector = androidx.compose.material.icons.Icons.Default.List,
+                            imageVector = androidx.compose.material.icons.Icons.Filled.List,
                             contentDescription = "Pick region",
                             modifier = Modifier.clickable { showCscPicker = true }.padding(8.dp)
                         )

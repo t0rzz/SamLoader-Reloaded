@@ -59,7 +59,15 @@ fun DuofrostApp() {
                 BottomNavigationItem(
                     selected = selectedTab == i,
                     onClick = { if (!busy) selectedTab = i },
-                    icon = { Icon(androidx.compose.material.icons.Icons.Filled.run { when (i) { 0 -> Download; 1 -> VpnKey; 2 -> History; else -> MoreHoriz } }, contentDescription = null) },
+                    icon = {
+                        val icon = when (i) {
+                            0 -> androidx.compose.material.icons.Icons.Filled.Download
+                            1 -> androidx.compose.material.icons.Icons.Filled.VpnKey
+                            2 -> androidx.compose.material.icons.Icons.Filled.History
+                            else -> androidx.compose.material.icons.Icons.Filled.MoreHoriz
+                        }
+                        Icon(icon, contentDescription = null)
+                    },
                     label = { Text(label) }
                 )
             }
