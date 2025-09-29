@@ -16,6 +16,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import android.widget.TextView
+import android.text.method.LinkMovementMethod
+import androidx.core.text.HtmlCompat
 import app.samloader.common.downloader.DownloaderViewModel
 
 @Composable
@@ -146,11 +150,7 @@ fun DownloaderScreen(
                                 ).joinToString(" • ")
                                 if (meta.isNotBlank()) Text(meta)
                                 Spacer(Modifier.height(6.dp))
-                                Text(
-                                    text = changelog?.notes ?: "",
-                                    maxLines = 12,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                HtmlText(html = changelog?.notes ?: "", modifier = Modifier.fillMaxWidth())
                             }
                         }
                     }
@@ -229,5 +229,22 @@ private fun CscPickerDialog(onDismiss: () -> Unit, onSelected: (String) -> Unit)
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+    )
+}
+
+
+@Composable
+private fun HtmlText(html: String, modifier: Modifier = Modifier) {
+    AndroidView(
+        modifier = modifier,
+        factory = { context ->
+            TextView(context).apply {
+                setTextIsSelectable(true)
+                movementMethod = LinkMovementMethod.getInstance()
+            }
+        },
+        update = { tv ->
+            tv.text = HtmlCompat.fromHtml(html, HtmlCompat.FROM_HTML_MODE_COMPACT)
+        }
     )
 }
