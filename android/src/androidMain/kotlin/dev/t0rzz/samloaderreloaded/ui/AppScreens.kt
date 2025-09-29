@@ -232,8 +232,17 @@ private fun TabDownload(
     var outDir by remember { mutableStateOf("") }
     var outDirDisplay by remember { mutableStateOf("") }
     var threads by remember { mutableStateOf(1) }
+    var threadsText by remember { mutableStateOf("1") }
     var resume by remember { mutableStateOf(false) }
     var autoDec by remember { mutableStateOf(false) }
+
+    // Initialize threads and auto-decrypt from saved preferences
+    LaunchedEffect(Unit) {
+        val def = AppPrefs.getDefaultThreads().coerceIn(1, 10)
+        threads = def
+        threadsText = def.toString()
+        autoDec = AppPrefs.getAutoDecrypt()
+    }
 
     var progress by remember { mutableStateOf(0f) }
     var stats by remember { mutableStateOf("") }
@@ -337,13 +346,32 @@ private fun TabDownload(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Threads")
                 Spacer(Modifier.width(8.dp))
+                IconButton(onClick = {
+                    if (threads > 1) {
+                        threads -= 1
+                        threadsText = threads.toString()
+                    }
+                }) { Text("-") }
+                Spacer(Modifier.width(4.dp))
                 OutlinedTextField(
-                    value = threads.toString(),
-                    onValueChange = { v -> threads = v.toIntOrNull()?.coerceIn(1,10) ?: 1 },
+                    value = threadsText,
+                    onValueChange = { v ->
+                        val digits = v.filter { it.isDigit() }.take(2)
+                        threadsText = digits
+                        digits.toIntOrNull()?.let { threads = it.coerceIn(1, 10) }
+                    },
                     modifier = Modifier.width(80.dp),
                     singleLine = true,
+                    label = { Text("1..10") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
+                Spacer(Modifier.width(4.dp))
+                IconButton(onClick = {
+                    if (threads < 10) {
+                        threads += 1
+                        threadsText = threads.toString()
+                    }
+                }) { Text("+") }
                 Spacer(Modifier.width(16.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = resume, onCheckedChange = { resume = it })
