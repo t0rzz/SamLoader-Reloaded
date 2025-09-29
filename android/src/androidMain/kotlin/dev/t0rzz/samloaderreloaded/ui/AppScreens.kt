@@ -54,6 +54,7 @@ fun DuofrostApp() {
     var fw by remember { mutableStateOf("") } // normalized version prefilled in Download/Decrypt
     var downloadedInUri by remember { mutableStateOf("") } // encrypted file URI after download
     var busy by remember { mutableStateOf(false) }
+    var showLegacyDownloader by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val appScope = rememberCoroutineScope()
