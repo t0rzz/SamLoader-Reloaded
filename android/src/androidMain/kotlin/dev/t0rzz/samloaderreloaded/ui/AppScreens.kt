@@ -87,19 +87,7 @@ fun DuofrostApp() {
                         selectedTab = 1
                     }
                 )
-                1 -> TabDownload(
-                    model = model,
-                    region = region,
-                    imei = imei,
-                    fw = fw,
-                    onDeviceChanged = { m, r, i -> model = m; region = r; imei = i },
-                    onFwChanged = { fw = it },
-                    onDownloadedUri = { uri -> downloadedInUri = uri },
-                    busy = busy,
-                    setBusy = { busy = it },
-                    reportError = { msg -> appScope.launch { snackbarHostState.showSnackbar(msg.take(300)) } }
-                )
-                2 -> TabDecrypt(
+                1 -> TabDecrypt(
                     model = model,
                     region = region,
                     imei = imei,
@@ -111,8 +99,8 @@ fun DuofrostApp() {
                     busy = busy,
                     reportError = { msg -> appScope.launch { snackbarHostState.showSnackbar(msg.take(300)) } }
                 )
-                3 -> TabHistory()
-                4 -> TabSettings()
+                2 -> TabHistory()
+                3 -> TabSettings()
             }
         }
     }
