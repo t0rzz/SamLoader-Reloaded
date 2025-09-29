@@ -9,6 +9,7 @@ import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logger
 import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 
@@ -32,14 +33,18 @@ actual object ChangelogHandler {
         val http = client()
         try {
             val outerUrl = "$DOMAIN_URL/$device/$region/doc.html"
-            val outerResp = http.get(outerUrl)
-            if (!outerResp.status.isSuccess()) return null
-            val outerHtml = outerResp.bodyAsText()
+            val outerResp = http.get(outerUrl) {
+                header("User-Agent", "curl/7.87.0")
+            }
+            val outerHtml = try { outerResp.bodyAsText() } catch (_: Throwable) { "" }
+            if (outerHtml.isBlank()) return null
             val iframeUrl = parseDocUrl(outerHtml)
             val bodyHtml = if (iframeUrl != null) {
-                val pageResp = http.get(iframeUrl)
-                if (!pageResp.status.isSuccess()) return null
-                pageResp.bodyAsText()
+                val pageResp = http.get(iframeUrl) {
+                    header("User-Agent", "curl/7.87.0")
+                }
+                val body = try { pageResp.bodyAsText() } catch (_: Throwable) { "" }
+                if (body.isNotBlank()) body else outerHtml
             } else {
                 // No language selector found, parse the page we already have
                 outerHtml
@@ -55,15 +60,27 @@ actual object ChangelogHandler {
     private fun parseDocUrl(body: String): String? {
         val doc = Ksoup.parse(body)
         val selector = doc.selectFirst("#sel_lang_hidden") ?: return null
-        // Options look like: <option value='../../SM-XXXX/.../eng.html'>English</option>
+        // Options can be in two forms:
+        // 1) Visible: <option value='../../.../eng.html'>English</option>
+        // 2) Hidden:  <option value='EN'>../../.../eng.html</option>
         val options = selector.select("option")
-        // Prefer option whose value clearly points to English page
+        fun optionPath(opt: com.fleeksoft.ksoup.nodes.Element): String {
+            val v = (opt.attr("value") ?: "").trim()
+            val t = (opt.text() ?: "").trim()
+            // Prefer attribute if it looks like a path; otherwise fallback to inner text
+            val candidate = if (v.contains(".html", ignoreCase = true) || v.startsWith("../")) v else t
+            return candidate
+        }
+        // Prefer English explicitly
         val eng = options.firstOrNull { opt ->
-            val v = opt.attr("value") ?: ""
-            v.contains("/eng/", ignoreCase = true) || v.endsWith("eng.html", ignoreCase = true)
+            val v = (opt.attr("value") ?: "").trim()
+            val t = (opt.text() ?: "").trim()
+            v.equals("EN", ignoreCase = true) ||
+                    v.contains("/eng/", ignoreCase = true) || v.endsWith("eng.html", ignoreCase = true) ||
+                    t.contains("/eng/", ignoreCase = true) || t.endsWith("eng.html", ignoreCase = true)
         }
         val chosen = eng ?: options.firstOrNull() ?: return null
-        val raw = (chosen.attr("value") ?: "").trim()
+        val raw = optionPath(chosen).trim()
         if (raw.isEmpty()) return null
         // Build absolute URL from relative paths
         val absolute = when {
