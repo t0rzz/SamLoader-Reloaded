@@ -1,10 +1,10 @@
 package app.samloader.common.prefs
 
-import com.russhwolf.settings.PreferencesSettings
+import com.russhwolf.settings.MapSettings
 import com.russhwolf.settings.Settings
-import java.util.prefs.Preferences
 
 actual fun provideSettings(): Settings {
-    val node = Preferences.userRoot().node("dev.t0rzz.samloaderreloaded")
-    return PreferencesSettings(node)
+    // Use in-memory settings to be safe across Android and Desktop when consuming JVM variant.
+    // Avoid java.util.prefs which is not supported on Android and can crash.
+    return MapSettings()
 }
