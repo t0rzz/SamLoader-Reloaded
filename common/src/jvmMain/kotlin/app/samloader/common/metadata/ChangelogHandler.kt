@@ -49,43 +49,41 @@ actual object ChangelogHandler {
 
     private fun parseDocUrl(body: String): String? {
         val doc = Ksoup.parse(body)
-        val selector = doc.selectFirst("#sel_lang_hidden")
-        val option = selector?.children()?.firstOrNull() ?: return null
-        val relative = option.text()
+        val selector = doc.selectFirst("#sel_lang_hidden") ?: return null
+        // Prefer English entry explicitly (path contains "/eng/")
+        val options = selector.children()
+        val eng = options.firstOrNull { it.text().contains("/eng/", ignoreCase = true) }
+        val chosen = eng ?: options.firstOrNull() ?: return null
+        val relative = chosen.text()
         return if (relative.isNullOrBlank()) null else relative.replace("../../", "$DOMAIN_URL/")
     }
 
     private fun parseChangelogs(body: String): Map<String, Changelog> {
         val doc = try { Ksoup.parse(body) } catch (_: Throwable) { return emptyMap() }
-        val container = doc.selectFirst(".container") ?: return emptyMap()
-        val divs = container.children().toMutableList()
-        divs.removeAll { it.tagName() == "hr" }
+        val rows = doc.select(".container .row").toList()
         val out = LinkedHashMap<String, Changelog>()
-        var i = 3
-        while (i < divs.size) {
-            val row = divs[i].children()
-            val log = divs.getOrNull(i + 1)
-            val (build, androidVer, relDate, secPatch) = when (row.count()) {
-                4 -> listOf(
-                    row.getOrNull(0)?.text()?.substringAfter(":")?.trim(),
-                    row.getOrNull(1)?.text()?.substringAfter(":")?.trim(),
-                    row.getOrNull(2)?.text()?.substringAfter(":")?.trim(),
-                    row.getOrNull(3)?.text()?.substringAfter(":")?.trim(),
-                )
-                3 -> listOf(
-                    row.getOrNull(0)?.text()?.substringAfter(":")?.trim(),
-                    row.getOrNull(1)?.text()?.substringAfter(":")?.trim(),
-                    row.getOrNull(2)?.text()?.substringAfter(":")?.trim(),
-                    null,
-                )
-                else -> listOf(null, null, null, null)
+        var i = 0
+        while (i < rows.size) {
+            val row = rows[i]
+            val cols = row.children()
+            // Identify a metadata row with 3 or 4 columns that contain key:value pairs
+            val isMetaRow = (cols.size in 3..4) && cols.all { it.text().contains(":") }
+            if (isMetaRow) {
+                fun valueAt(idx: Int): String? = cols.getOrNull(idx)?.text()?.substringAfter(":")?.trim()?.ifBlank { null }
+                val build = valueAt(0)
+                val androidVer = valueAt(1)
+                val relDate = valueAt(2)
+                val secPatch = if (cols.size >= 4) valueAt(3) else null
+                // Notes are typically in the next row (rich HTML)
+                val next = rows.getOrNull(i + 1)
+                val notes = next?.children()?.firstOrNull()?.childNodes()?.joinToString(separator = "") { it.outerHtml() }
+                if (!build.isNullOrBlank()) {
+                    out[build] = Changelog(build, androidVer, relDate, secPatch, notes)
+                }
+                i += 2
+                continue
             }
-            val notes = log?.children()?.getOrNull(0)?.childNodes()?.joinToString(separator = "") { it.outerHtml() }
-            val fw = build
-            if (!fw.isNullOrBlank()) {
-                out[fw] = Changelog(fw, androidVer, relDate, secPatch, notes)
-            }
-            i += 2
+            i += 1
         }
         return out
     }
