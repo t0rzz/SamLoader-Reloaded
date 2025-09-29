@@ -55,12 +55,24 @@ actual object ChangelogHandler {
     private fun parseDocUrl(body: String): String? {
         val doc = Ksoup.parse(body)
         val selector = doc.selectFirst("#sel_lang_hidden") ?: return null
-        // Prefer English entry explicitly (path contains "/eng/")
-        val options = selector.children()
-        val eng = options.firstOrNull { it.text().contains("/eng/", ignoreCase = true) }
+        // Options look like: <option value='../../SM-XXXX/.../eng.html'>English</option>
+        val options = selector.select("option")
+        // Prefer option whose value clearly points to English page
+        val eng = options.firstOrNull { opt ->
+            val v = opt.attr("value") ?: ""
+            v.contains("/eng/", ignoreCase = true) || v.endsWith("eng.html", ignoreCase = true)
+        }
         val chosen = eng ?: options.firstOrNull() ?: return null
-        val relative = chosen.text()
-        return if (relative.isNullOrBlank()) null else relative.replace("../../", "$DOMAIN_URL/")
+        val raw = (chosen.attr("value") ?: "").trim()
+        if (raw.isEmpty()) return null
+        // Build absolute URL from relative paths
+        val absolute = when {
+            raw.startsWith("../../") -> raw.replaceFirst("../../", "$DOMAIN_URL/")
+            raw.startsWith("/") -> "$DOMAIN_URL$raw"
+            raw.startsWith("http://") || raw.startsWith("https://") -> raw
+            else -> "$DOMAIN_URL/$raw"
+        }
+        return absolute
     }
 
     private fun parseChangelogs(body: String): Map<String, Changelog> {
