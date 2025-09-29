@@ -126,7 +126,7 @@ fun DownloaderScreen(
                 )
                 vm.validateImeis()?.let { Text(it, color = MaterialTheme.colors.error, style = MaterialTheme.typography.caption) }
                 Spacer(Modifier.height(4.dp))
-                Text(text = "OS Version: ${'$'}osVersion")
+                Text(text = "OS Version: $osVersion")
             }
             item {
                 Surface(shape = MaterialTheme.shapes.small, elevation = 0.dp, modifier = Modifier.fillMaxWidth()) {
@@ -141,8 +141,8 @@ fun DownloaderScreen(
                                 Text("No changelog available.")
                             } else {
                                 val meta = listOfNotNull(
-                                    changelog?.relDate?.let { "Release: ${'$'}it" },
-                                    changelog?.secPatch?.let { "Security: ${'$'}it" }
+                                    changelog?.relDate?.let { "Release: $it" },
+                                    changelog?.secPatch?.let { "Security: $it" }
                                 ).joinToString(" • ")
                                 if (meta.isNotBlank()) Text(meta)
                                 Spacer(Modifier.height(6.dp))
