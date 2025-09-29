@@ -35,11 +35,16 @@ actual object ChangelogHandler {
             val outerResp = http.get(outerUrl)
             if (!outerResp.status.isSuccess()) return null
             val outerHtml = outerResp.bodyAsText()
-            val iframeUrl = parseDocUrl(outerHtml) ?: return null
-            val pageResp = http.get(iframeUrl)
-            if (!pageResp.status.isSuccess()) return null
-            val body = pageResp.bodyAsText()
-            return parseChangelogs(body)
+            val iframeUrl = parseDocUrl(outerHtml)
+            val bodyHtml = if (iframeUrl != null) {
+                val pageResp = http.get(iframeUrl)
+                if (!pageResp.status.isSuccess()) return null
+                pageResp.bodyAsText()
+            } else {
+                // No language selector found, parse the page we already have
+                outerHtml
+            }
+            return parseChangelogs(bodyHtml)
         } catch (_: Throwable) {
             return null
         } finally {
@@ -71,16 +76,31 @@ actual object ChangelogHandler {
             if (isMetaRow) {
                 fun valueAt(idx: Int): String? = cols.getOrNull(idx)?.text()?.substringAfter(":")?.trim()?.ifBlank { null }
                 val build = valueAt(0)
-                val androidVer = valueAt(1)
+                val rawAndroidVer = valueAt(1)
+                val androidVer = rawAndroidVer?.let { Regex("\\(([^)]+)\\)").find(it)?.groupValues?.getOrNull(1) ?: it }?.trim()
                 val relDate = valueAt(2)
                 val secPatch = if (cols.size >= 4) valueAt(3) else null
-                // Notes are typically in the next row (rich HTML)
-                val next = rows.getOrNull(i + 1)
-                val notes = next?.children()?.firstOrNull()?.childNodes()?.joinToString(separator = "") { it.outerHtml() }
+
+                // Notes are in the following sibling <div> (not a .row), typically containing a <span>
+                var notes: String? = null
+                var sib = row.nextElementSibling()
+                var guard = 0
+                while (sib != null && guard < 6) { // small guard to avoid long loops
+                    if (sib.hasClass("row")) break // stop at next meta section
+                    val span = sib.select("span").firstOrNull()
+                    if (span != null) {
+                        notes = span.html()
+                        break
+                    }
+                    sib = sib.nextElementSibling()
+                    guard++
+                }
+
                 if (!build.isNullOrBlank()) {
                     out[build] = Changelog(build, androidVer, relDate, secPatch, notes)
                 }
-                i += 2
+                // Advance i to the next .row after the notes block
+                i += 1
                 continue
             }
             i += 1
