@@ -36,6 +36,7 @@ import app.samloader.common.util.Format
 import kotlin.math.roundToLong
 // Compose Material icons (extension properties) imports
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.filled.History
@@ -44,7 +45,7 @@ import androidx.compose.material.icons.filled.MoreHoriz
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun DuofrostApp() {
-    val tabs = listOf("Download", "Decrypter", "History", "More")
+    val tabs = listOf("Home", "Download", "Decrypter", "History", "More")
     var selectedTab by remember { mutableStateOf(0) }
 
     // Shared UI state hoisted at top-level to persist across tabs
@@ -54,7 +55,6 @@ fun DuofrostApp() {
     var fw by remember { mutableStateOf("") } // normalized version prefilled in Download/Decrypt
     var downloadedInUri by remember { mutableStateOf("") } // encrypted file URI after download
     var busy by remember { mutableStateOf(false) }
-    var showLegacyDownloader by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val appScope = rememberCoroutineScope()
@@ -68,9 +68,10 @@ fun DuofrostApp() {
                     onClick = { if (!busy) selectedTab = i },
                     icon = {
                         val icon = when (i) {
-                            0 -> Icons.Filled.Download
-                            1 -> Icons.Filled.VpnKey
-                            2 -> Icons.Filled.History
+                            0 -> Icons.Filled.Home
+                            1 -> Icons.Filled.Download
+                            2 -> Icons.Filled.VpnKey
+                            3 -> Icons.Filled.History
                             else -> Icons.Filled.MoreHoriz
                         }
                         Icon(icon, contentDescription = null)
@@ -82,32 +83,25 @@ fun DuofrostApp() {
     }, snackbarHost = { SnackbarHost(snackbarHostState) }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             when (selectedTab) {
-                0 -> run {
-                    // Toggle between the new lightweight screen and the legacy downloader that performs the actual file download
-                    if (!showLegacyDownloader) {
-                        dev.t0rzz.samloaderreloaded.ui.downloader.DownloaderScreen(
-                            onStartDownload = { m, r, i, f ->
-                                model = m; region = r; imei = i; fw = f
-                                // Switch to the legacy downloader to perform the actual download flow (pick location, progress bar, etc.)
-                                showLegacyDownloader = true
-                            }
-                        )
-                    } else {
-                        TabDownload(
-                            model = model,
-                            region = region,
-                            imei = imei,
-                            fw = fw,
-                            onDeviceChanged = { m, r, i -> model = m; region = r; imei = i },
-                            onFwChanged = { fw = it },
-                            onDownloadedUri = { downloadedInUri = it },
-                            busy = busy,
-                            setBusy = { busy = it },
-                            reportError = { msg -> appScope.launch { snackbarHostState.showSnackbar(msg.take(300)) } }
-                        )
+                0 -> dev.t0rzz.samloaderreloaded.ui.downloader.DownloaderScreen(
+                    onStartDownload = { m, r, i, f ->
+                        model = m; region = r; imei = i; fw = f
+                        selectedTab = 1
                     }
-                }
-                1 -> TabDecrypt(
+                )
+                1 -> TabDownload(
+                    model = model,
+                    region = region,
+                    imei = imei,
+                    fw = fw,
+                    onDeviceChanged = { m, r, i -> model = m; region = r; imei = i },
+                    onFwChanged = { fw = it },
+                    onDownloadedUri = { downloadedInUri = it },
+                    busy = busy,
+                    setBusy = { busy = it },
+                    reportError = { msg -> appScope.launch { snackbarHostState.showSnackbar(msg.take(300)) } }
+                )
+                2 -> TabDecrypt(
                     model = model,
                     region = region,
                     imei = imei,
@@ -119,8 +113,8 @@ fun DuofrostApp() {
                     busy = busy,
                     reportError = { msg -> appScope.launch { snackbarHostState.showSnackbar(msg.take(300)) } }
                 )
-                2 -> TabHistory()
-                3 -> TabSettings()
+                3 -> TabHistory()
+                4 -> TabSettings()
             }
         }
     }
