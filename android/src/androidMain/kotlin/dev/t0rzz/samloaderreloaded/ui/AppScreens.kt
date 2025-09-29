@@ -81,12 +81,31 @@ fun DuofrostApp() {
     }, snackbarHost = { SnackbarHost(snackbarHostState) }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             when (selectedTab) {
-                0 -> dev.t0rzz.samloaderreloaded.ui.downloader.DownloaderScreen(
-                    onStartDownload = { m, r, i, f ->
-                        model = m; region = r; imei = i; fw = f
-                        selectedTab = 1
+                0 -> run {
+                    // Toggle between the new lightweight screen and the legacy downloader that performs the actual file download
+                    if (!showLegacyDownloader) {
+                        dev.t0rzz.samloaderreloaded.ui.downloader.DownloaderScreen(
+                            onStartDownload = { m, r, i, f ->
+                                model = m; region = r; imei = i; fw = f
+                                // Switch to the legacy downloader to perform the actual download flow (pick location, progress bar, etc.)
+                                showLegacyDownloader = true
+                            }
+                        )
+                    } else {
+                        TabDownload(
+                            model = model,
+                            region = region,
+                            imei = imei,
+                            fw = fw,
+                            onDeviceChanged = { m, r, i -> model = m; region = r; imei = i },
+                            onFwChanged = { fw = it },
+                            onDownloadedUri = { downloadedInUri = it },
+                            busy = busy,
+                            setBusy = { busy = it },
+                            reportError = { msg -> appScope.launch { snackbarHostState.showSnackbar(msg.take(300)) } }
+                        )
                     }
-                )
+                }
                 1 -> TabDecrypt(
                     model = model,
                     region = region,
