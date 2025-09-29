@@ -1,3 +1,68 @@
 # Ignore built distributions and large binaries
 /dist/
 *.exe
+
+# Gradle
+.gradle/
+build/
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+# Kotlin
+.kotlin/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Android
+android/build/
+android/app/build/
+*.apk
+*.aar
+*.ap_
+*.dex
+
+# iOS
+iosApp/build/
+*.framework
+
+# Desktop
+desktop/build/
+
+# Common
+common/build/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Local configuration
+local.properties
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
