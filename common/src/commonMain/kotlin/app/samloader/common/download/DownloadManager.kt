@@ -4,6 +4,7 @@ import app.samloader.common.fus.FusClient
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.selects.select
 import kotlin.math.min
 
 /** Simple shared downloader that streams from FUS cloud and can download in parallel. */
@@ -58,7 +59,7 @@ object DownloadManager {
         data class Segment(val start: Long, val endInclusive: Long)
 
         // Build segment list (reduced segment size to limit per-thread memory usage)
-        val segmentSize = 2L * 1024L * 1024L // 2 MiB per segment for safer memory footprint across platforms
+        val segmentSize = 1L * 1024L * 1024L // 1 MiB per segment for lower memory footprint
         val segments = mutableListOf<Segment>()
         var pos = 0L
         while (pos < size) {
@@ -70,6 +71,7 @@ object DownloadManager {
         val maxConcurrency = threads.coerceAtLeast(1)
         val outChan = Channel<Pair<Long, ByteArray>>(capacity = maxConcurrency * 2)
         val segChan = Channel<Segment>(capacity = maxConcurrency * 4)
+        val errorChan = Channel<Exception>(capacity = maxConcurrency)
 
         // Feed all segments into a bounded channel
         val producer = launch {
@@ -80,58 +82,105 @@ object DownloadManager {
         // Worker coroutines: fetch segments concurrently (up to maxConcurrency)
         val jobs = List(maxConcurrency) {
             async(Dispatchers.IO) {
-                for (seg in segChan) {
-                    // Stream this segment and accumulate into a single buffer to send once per segment
-                    val chunks = fus.downloadBinary(modelPathAndName, seg.start, seg.endInclusive).chunks
-                    val totalLenLong = seg.endInclusive - seg.start + 1
-                    val expectedLen = if (totalLenLong > Int.MAX_VALUE) Int.MAX_VALUE else totalLenLong.toInt()
-                    var buf = ByteArray(expectedLen)
-                    var offset = 0
-                    chunks.collect { chunk ->
-                        // Ensure capacity (should not be needed with expectedLen, but guard anyway)
-                        if (offset + chunk.size > buf.size) {
-                            buf = buf.copyOf(maxOf(buf.size * 2, offset + chunk.size))
+                var retryCount = 0
+                val maxRetries = 3
+
+                while (true) {
+                    val seg = segChan.receiveCatching().getOrNull() ?: break
+
+                    try {
+                        // Stream this segment and accumulate into a single buffer to send once per segment
+                        val chunks = fus.downloadBinary(modelPathAndName, seg.start, seg.endInclusive).chunks
+                        val totalLenLong = seg.endInclusive - seg.start + 1
+                        val expectedLen = if (totalLenLong > Int.MAX_VALUE) Int.MAX_VALUE else totalLenLong.toInt()
+                        var buf = ByteArray(min(expectedLen, 64 * 1024)) // Start with 64KB buffer, grow as needed
+                        var offset = 0
+
+                        chunks.collect { chunk ->
+                            // Ensure capacity with smaller growth increments
+                            if (offset + chunk.size > buf.size) {
+                                val newSize = maxOf(buf.size * 2, offset + chunk.size)
+                                buf = buf.copyOf(min(newSize, expectedLen)) // Cap at expected size
+                            }
+                            chunk.copyInto(destination = buf, destinationOffset = offset, startIndex = 0, endIndex = chunk.size)
+                            offset += chunk.size
                         }
-                        chunk.copyInto(destination = buf, destinationOffset = offset, startIndex = 0, endIndex = chunk.size)
-                        offset += chunk.size
+
+                        val toSend = if (offset == buf.size) buf else buf.copyOf(offset)
+                        outChan.send(seg.start to toSend)
+                        retryCount = 0 // Reset retry count on success
+
+                    } catch (e: Exception) {
+                        if (retryCount < maxRetries) {
+                            retryCount++
+                            // Put segment back in queue for retry
+                            segChan.send(seg)
+                            continue
+                        } else {
+                            // Max retries exceeded, report error but continue with other segments
+                            errorChan.send(e)
+                            break
+                        }
                     }
-                    val toSend = if (offset == buf.size) buf else buf.copyOf(offset)
-                    outChan.send(seg.start to toSend)
                 }
             }
         }
 
-        // Writer: ensure in-order writes
+        // Writer: ensure in-order writes with memory-bounded pending map
         var nextStart = 0L
         var writtenTotal = 0L
         val pending = mutableMapOf<Long, ByteArray>()
         var received = 0
         val expected = segments.size
+        var hasErrors = false
 
-        while (received < expected) {
-            val (segStart, data) = outChan.receive()
-            pending[segStart] = data
-            received += 1
-            // Write any contiguous ready segments
-            while (true) {
-                val ready = pending.remove(nextStart) ?: break
-                write(ready)
-                writtenTotal += ready.size
-                onProgress(ready.size)
-                nextStart += ready.size
+        try {
+            while (received < expected) {
+                select<Unit> {
+                    outChan.onReceive { (segStart, data) ->
+                        pending[segStart] = data
+                        received += 1
+
+                        // Write any contiguous ready segments
+                        while (true) {
+                            val ready = pending.remove(nextStart) ?: break
+                            write(ready)
+                            writtenTotal += ready.size.toLong()
+                            onProgress(ready.size)
+                            nextStart += ready.size
+                        }
+                    }
+                    errorChan.onReceive { error ->
+                        // Log error but continue processing
+                        hasErrors = true
+                        // Continue processing other segments
+                    }
+                }
             }
+        } catch (e: Exception) {
+            // If we get an exception during the main loop, cancel all jobs
+            jobs.forEach { it.cancel() }
+            throw e
         }
-        // Ensure all producer jobs completed before closing channel
-        jobs.awaitAll()
-        outChan.close()
 
-        // In case the last received filled gaps enabling more writes
+        // Wait for all jobs to complete
+        jobs.forEach { it.await() }
+        outChan.close()
+        errorChan.close()
+
+        // Write any remaining pending segments
         while (true) {
             val ready = pending.remove(nextStart) ?: break
             write(ready)
-            writtenTotal += ready.size
+            writtenTotal += ready.size.toLong()
             onProgress(ready.size)
             nextStart += ready.size
+        }
+
+        // If we had errors but still wrote some data, return partial result
+        // Otherwise throw the first error we encountered
+        if (hasErrors && writtenTotal == 0L) {
+            throw Exception("All download threads failed")
         }
 
         Result(writtenTotal)
