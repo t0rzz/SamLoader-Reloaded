@@ -86,7 +86,7 @@ fun DownloaderScreen(
             item {
                 OutlinedTextField(
                     value = region,
-                    onValueChange = { vm.setRegion(it.uppercase()) },
+                    onValueChange = { vm.setRegion(it.uppercase().take(3)) },
                     label = { Text("Region (e.g. XAA)") },
                     placeholder = { Text("TMB") },
                     trailingIcon = {

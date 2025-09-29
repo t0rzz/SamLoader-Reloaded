@@ -341,43 +341,44 @@ private fun TabDownload(
                 Spacer(Modifier.width(8.dp))
                 Button(onClick = { if (ensureLegacyReadPerm()) pickDirLauncher.launch(null) else permDeniedMsg = "Storage permission required" }, enabled = !busy) { Text("Browse…") }
             }
-            Text("Shown path is derived from selected storage; the app stores the permission (URI) — files are written via Android SAF.", style = MaterialTheme.typography.caption)
             Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Threads")
-                Spacer(Modifier.width(8.dp))
-                IconButton(onClick = {
-                    if (threads > 1) {
-                        threads -= 1
-                        threadsText = threads.toString()
-                    }
-                }) { Text("-") }
-                Spacer(Modifier.width(4.dp))
-                OutlinedTextField(
-                    value = threadsText,
-                    onValueChange = { v ->
-                        val digits = v.filter { it.isDigit() }.take(2)
-                        threadsText = digits
-                        digits.toIntOrNull()?.let { threads = it.coerceIn(1, 10) }
-                    },
-                    modifier = Modifier.width(80.dp),
-                    singleLine = true,
-                    label = { Text("1..10") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-                Spacer(Modifier.width(4.dp))
-                IconButton(onClick = {
-                    if (threads < 10) {
-                        threads += 1
-                        threadsText = threads.toString()
-                    }
-                }) { Text("+") }
-                Spacer(Modifier.width(16.dp))
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Threads")
+                    Spacer(Modifier.width(8.dp))
+                    IconButton(onClick = {
+                        if (threads > 1) {
+                            threads -= 1
+                            threadsText = threads.toString()
+                        }
+                    }) { Text("-") }
+                    Spacer(Modifier.width(4.dp))
+                    OutlinedTextField(
+                        value = threadsText,
+                        onValueChange = { v ->
+                            val digits = v.filter { it.isDigit() }.take(2)
+                            threadsText = digits
+                            digits.toIntOrNull()?.let { threads = it.coerceIn(1, 10) }
+                        },
+                        modifier = Modifier.width(80.dp),
+                        singleLine = true,
+                        label = { Text("1..10") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    IconButton(onClick = {
+                        if (threads < 10) {
+                            threads += 1
+                            threadsText = threads.toString()
+                        }
+                    }) { Text("+") }
+                }
+                Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = resume, onCheckedChange = { resume = it })
                     Text("Resume")
                 }
-                Spacer(Modifier.width(16.dp))
+                Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = autoDec, onCheckedChange = { autoDec = it })
                     Text("Auto-decrypt after download")
